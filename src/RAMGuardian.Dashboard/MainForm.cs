@@ -11,6 +11,7 @@ using RAMGuardian.Logging;
 using RAMGuardian.Optimization;
 using RAMGuardian.Optimization.Actions;
 using RAMGuardian.Security.Policies;
+using RAMGuardian.Service;
 
 namespace RAMGuardian.Dashboard
 {
@@ -27,6 +28,7 @@ namespace RAMGuardian.Dashboard
         private bool _allowExit = false;
         private GuardianConfig _currentConfig;
         private StateSnapshot _latestSnapshot;
+        private MonitoringEngine _embeddedEngine;
 
         // Top Header
         private Label _lblLogo;
@@ -126,6 +128,21 @@ namespace RAMGuardian.Dashboard
             _protectionPolicy = new ProcessProtectionPolicy();
             _currentConfig = _configManager.LoadConfig();
 
+            // Auto-detect if Windows background service is active; if not, run embedded engine
+            if (!IsServiceOrConsoleActive())
+            {
+                try
+                {
+                    _embeddedEngine = new MonitoringEngine(Math.Max(5, _currentConfig.MonitoringIntervalSeconds));
+                    _embeddedEngine.Start();
+                    _logger.Info("STANDALONE_ENGINE", "RAM Guardian Windows Service not active; running in standalone embedded engine mode.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error("STANDALONE_START_ERR", "Failed to start standalone embedded engine", ex);
+                }
+            }
+
             InitializeComponent();
             SetupTrayIcon();
             SwitchSection(0);
@@ -134,6 +151,31 @@ namespace RAMGuardian.Dashboard
             _refreshTimer = new Timer { Interval = Math.Max(2000, _currentConfig.DashboardRefreshIntervalSeconds * 1000) };
             _refreshTimer.Tick += (s, e) => LoadLatestSnapshot();
             _refreshTimer.Start();
+        }
+
+        private bool IsServiceOrConsoleActive()
+        {
+            try
+            {
+                using (var sc = new System.ServiceProcess.ServiceController("RAMGuardian"))
+                {
+                    if (sc.Status == System.ServiceProcess.ServiceControllerStatus.Running) return true;
+                }
+            }
+            catch { }
+
+            string snapPath = @"C:\ProgramData\RAM Guardian\latest.json";
+            if (File.Exists(snapPath))
+            {
+                try
+                {
+                    var diff = DateTime.UtcNow - File.GetLastWriteTimeUtc(snapPath);
+                    if (diff.TotalSeconds < 30) return true;
+                }
+                catch { }
+            }
+
+            return false;
         }
 
         private void InitializeComponent()
@@ -1125,8 +1167,9 @@ namespace RAMGuardian.Dashboard
                 UpdateProcessList(snapshot);
                 UpdateEdgeTab(snapshot);
 
-                _lblFooterStatus.Text = string.Format("Active Mode: {0} | System Pressure: {1} | Physical Available: {2:F1} MB | Commit: {3:F1}% | Uptime: {4:F0}s",
-                    snapshot.OperatingMode, snapshot.PressureLevel, snapshot.Metrics.AvailablePhysicalMB,
+                string hostType = _embeddedEngine != null ? "Standalone Engine" : "Background Service";
+                _lblFooterStatus.Text = string.Format("Mode: {0} | {1} Active | System Pressure: {2} | Available: {3:F1} MB | Commit: {4:F1}% | Uptime: {5:F0}s",
+                    snapshot.OperatingMode, hostType, snapshot.PressureLevel, snapshot.Metrics.AvailablePhysicalMB,
                     snapshot.Metrics.CommitLoadPercentage, snapshot.ServiceUptimeSeconds);
             }
             catch { }
@@ -1605,6 +1648,11 @@ namespace RAMGuardian.Dashboard
             {
                 if (_refreshTimer != null) _refreshTimer.Dispose();
                 if (_trayIcon != null) _trayIcon.Dispose();
+                if (_embeddedEngine != null)
+                {
+                    try { _embeddedEngine.Stop(); _embeddedEngine.Dispose(); } catch { }
+                    _embeddedEngine = null;
+                }
             }
             base.Dispose(disposing);
         }

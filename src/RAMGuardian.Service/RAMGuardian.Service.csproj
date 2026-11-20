@@ -50,7 +50,6 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="MonitoringEngine.cs" />
     <Compile Include="RAMGuardianService.cs" />
     <Compile Include="Program.cs" />
   </ItemGroup>

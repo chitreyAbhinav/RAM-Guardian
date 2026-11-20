@@ -19,6 +19,7 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.ServiceProcess" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\RAMGuardian.Common\RAMGuardian.Common.csproj">
@@ -40,6 +41,14 @@
     <ProjectReference Include="..\RAMGuardian.Logging\RAMGuardian.Logging.csproj">
       <Project>{C3D4E5F6-A7B8-4C9D-0E1F-2A3B4C5D6E7F}</Project>
       <Name>RAMGuardian.Logging</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\RAMGuardian.Monitoring\RAMGuardian.Monitoring.csproj">
+      <Project>{B2C3D4E5-F6A7-4B8C-9D0E-1F2A3B4C5D6E}</Project>
+      <Name>RAMGuardian.Monitoring</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\RAMGuardian.Core\RAMGuardian.Core.csproj">
+      <Project>{2C3D4E5F-6A7B-8C9D-0E1F-2A3B4C5D6E7F}</Project>
+      <Name>RAMGuardian.Core</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

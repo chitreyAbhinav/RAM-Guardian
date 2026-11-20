@@ -34,6 +34,10 @@
       <Project>{1B2C3D4E-5F6A-7B8C-9D0E-1F2A3B4C5D6E}</Project>
       <Name>RAMGuardian.Optimization</Name>
     </ProjectReference>
+    <ProjectReference Include="..\RAMGuardian.Monitoring\RAMGuardian.Monitoring.csproj">
+      <Project>{B2C3D4E5-F6A7-4B8C-9D0E-1F2A3B4C5D6E}</Project>
+      <Name>RAMGuardian.Monitoring</Name>
+    </ProjectReference>
     <ProjectReference Include="..\RAMGuardian.Logging\RAMGuardian.Logging.csproj">
       <Project>{C3D4E5F6-A7B8-4C9D-0E1F-2A3B4C5D6E7F}</Project>
       <Name>RAMGuardian.Logging</Name>
@@ -45,6 +49,7 @@
     <Compile Include="Analysis\MemoryLeakDetector.cs" />
     <Compile Include="Analysis\NonpagedPoolTracker.cs" />
     <Compile Include="Analysis\OptimizationCoordinator.cs" />
+    <Compile Include="MonitoringEngine.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

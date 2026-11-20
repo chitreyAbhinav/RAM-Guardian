@@ -24,6 +24,18 @@
       <Project>{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}</Project>
       <Name>RAMGuardian.Common</Name>
     </ProjectReference>
+    <ProjectReference Include="..\RAMGuardian.Configuration\RAMGuardian.Configuration.csproj">
+      <Project>{0A1B2C3D-4E5F-6A7B-8C9D-0E1F2A3B4C5D}</Project>
+      <Name>RAMGuardian.Configuration</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\RAMGuardian.Security\RAMGuardian.Security.csproj">
+      <Project>{F6A7B8C9-D0E1-4F2A-3B4C-5D6E7F8A9B0C}</Project>
+      <Name>RAMGuardian.Security</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\RAMGuardian.Optimization\RAMGuardian.Optimization.csproj">
+      <Project>{1B2C3D4E-5F6A-7B8C-9D0E-1F2A3B4C5D6E}</Project>
+      <Name>RAMGuardian.Optimization</Name>
+    </ProjectReference>
     <ProjectReference Include="..\RAMGuardian.Monitoring\RAMGuardian.Monitoring.csproj">
       <Project>{B2C3D4E5-F6A7-4B8C-9D0E-1F2A3B4C5D6E}</Project>
       <Name>RAMGuardian.Monitoring</Name>
@@ -31,6 +43,10 @@
     <ProjectReference Include="..\RAMGuardian.Logging\RAMGuardian.Logging.csproj">
       <Project>{C3D4E5F6-A7B8-4C9D-0E1F-2A3B4C5D6E7F}</Project>
       <Name>RAMGuardian.Logging</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\RAMGuardian.Core\RAMGuardian.Core.csproj">
+      <Project>{2C3D4E5F-6A7B-8C9D-0E1F-2A3B4C5D6E7F}</Project>
+      <Name>RAMGuardian.Core</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

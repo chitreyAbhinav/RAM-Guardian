@@ -10,6 +10,9 @@ namespace RAMGuardian.Common.Models
         public string PressureLevel { get; set; }
         public string StatusMessage { get; set; }
         public double ServiceUptimeSeconds { get; set; }
+        public double AvailableRamSlopeMBPerMin { get; set; }
+        public double NonpagedPoolBaselineMB { get; set; }
+        public List<string> ActiveAlerts { get; set; }
 
         public SystemMemoryMetrics Metrics { get; set; }
         public List<ProcessMemoryInfo> TopProcesses { get; set; }
@@ -20,6 +23,7 @@ namespace RAMGuardian.Common.Models
             OperatingMode = "MonitorOnly";
             PressureLevel = "Normal";
             StatusMessage = "Service operating normally.";
+            ActiveAlerts = new List<string>();
             Metrics = new SystemMemoryMetrics();
             TopProcesses = new List<ProcessMemoryInfo>();
         }

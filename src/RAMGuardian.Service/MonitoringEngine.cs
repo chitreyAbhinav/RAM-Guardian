@@ -2,8 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using RAMGuardian.Common.Models;
+using RAMGuardian.Configuration;
+using RAMGuardian.Configuration.Models;
+using RAMGuardian.Core.Alerts;
+using RAMGuardian.Core.Analysis;
 using RAMGuardian.Logging;
 using RAMGuardian.Monitoring;
+using RAMGuardian.Optimization;
+using RAMGuardian.Optimization.Actions;
 
 namespace RAMGuardian.Service
 {
@@ -13,6 +19,13 @@ namespace RAMGuardian.Service
         private readonly ProcessMemoryCollector _procCollector;
         private readonly FileLogger _logger;
         private readonly SnapshotWriter _snapshotWriter;
+        private readonly ConfigManager _configManager;
+        private readonly TrendAnalyzer _trendAnalyzer;
+        private readonly MemoryLeakDetector _leakDetector;
+        private readonly NonpagedPoolTracker _poolTracker;
+        private readonly OptimizationCoordinator _optCoordinator;
+        private readonly List<MemoryAlert> _recentAlerts;
+
         private Timer _timer;
         private readonly DateTime _startTime;
         private int _intervalSeconds;
@@ -31,10 +44,16 @@ namespace RAMGuardian.Service
         {
             _intervalSeconds = Math.Max(5, intervalSeconds);
             _startTime = DateTime.UtcNow;
-            _memCollector = new SystemMemoryCollector();
-            _procCollector = new ProcessMemoryCollector();
             _logger = new FileLogger();
             _snapshotWriter = new SnapshotWriter();
+            _configManager = new ConfigManager();
+            _memCollector = new SystemMemoryCollector();
+            _procCollector = new ProcessMemoryCollector();
+            _trendAnalyzer = new TrendAnalyzer(120);
+            _leakDetector = new MemoryLeakDetector();
+            _poolTracker = new NonpagedPoolTracker();
+            _optCoordinator = new OptimizationCoordinator(new ActionRegistry(), new BackupManager(), _logger);
+            _recentAlerts = new List<MemoryAlert>();
         }
 
         public void Start()
@@ -68,18 +87,60 @@ namespace RAMGuardian.Service
 
         public StateSnapshot SampleOnce()
         {
+            GuardianConfig config = _configManager.LoadConfig();
             var metrics = _memCollector.CollectMetrics();
             var topProcs = _procCollector.GetTopProcesses(20);
-            string pressure = EvaluatePressure(metrics);
+
+            var newAlerts = new List<MemoryAlert>();
+
+            // 1. Ingest into Trend Analyzer (Composite Pressure Matrix + Hysteresis)
+            string pressure = _trendAnalyzer.IngestMetrics(metrics, config, newAlerts);
+
+            // 2. Ingest into Memory Leak Detector
+            _leakDetector.IngestProcessSnapshot(topProcs, newAlerts);
+
+            // 3. Ingest into Nonpaged Pool Tracker
+            _poolTracker.IngestPoolSample(metrics, newAlerts);
+
+            // 4. Safe Optimization Coordinator (if in SafeAutomatic mode & sustained pressure)
+            string optSummary;
+            if (_optCoordinator.TryExecuteSafeOptimization(config, _trendAnalyzer, newAlerts, out optSummary))
+            {
+                _logger.Info("OPTIMIZATION_EXECUTED", optSummary);
+            }
+
+            // Append new alerts to recent alerts list
+            lock (_recentAlerts)
+            {
+                for (int i = 0; i < newAlerts.Count; i++)
+                {
+                    _recentAlerts.Add(newAlerts[i]);
+                    // Keep up to 20 alerts
+                    if (_recentAlerts.Count > 20) _recentAlerts.RemoveAt(0);
+                }
+            }
+
+            var alertStrings = new List<string>();
+            lock (_recentAlerts)
+            {
+                for (int i = 0; i < _recentAlerts.Count; i++)
+                {
+                    alertStrings.Add(string.Format("[{0}] {1}: {2}",
+                        _recentAlerts[i].Severity, _recentAlerts[i].Title, _recentAlerts[i].Message));
+                }
+            }
 
             var snapshot = new StateSnapshot
             {
                 TimestampUtc = DateTime.UtcNow,
-                OperatingMode = "MonitorOnly",
+                OperatingMode = config.OperatingMode,
                 PressureLevel = pressure,
                 StatusMessage = string.Format("System {0}. Available: {1:F1} MB, Commit: {2:F1}%",
                     pressure, metrics.AvailablePhysicalMB, metrics.CommitLoadPercentage),
                 ServiceUptimeSeconds = Math.Round((DateTime.UtcNow - _startTime).TotalSeconds, 1),
+                AvailableRamSlopeMBPerMin = _trendAnalyzer.CalculateAvailableRamRateOfChangeMBPerMin(),
+                NonpagedPoolBaselineMB = _poolTracker.BaselineMB,
+                ActiveAlerts = alertStrings,
                 Metrics = metrics,
                 TopProcesses = topProcs
             };
@@ -102,9 +163,6 @@ namespace RAMGuardian.Service
                 _cycleCount++;
                 StateSnapshot snapshot = SampleOnce();
 
-                // Write atomic snapshot
-                _snapshotWriter.WriteSnapshot(snapshot);
-
                 // Periodic structured logging (every 4 cycles = ~1 minute, or immediately if pressure elevated/high/critical)
                 bool isSignificant = snapshot.PressureLevel != "Normal" || (_cycleCount % 4 == 0);
                 if (isSignificant)
@@ -113,11 +171,13 @@ namespace RAMGuardian.Service
                     if (snapshot.PressureLevel == "Elevated") level = LogLevel.Warning;
                     else if (snapshot.PressureLevel == "High" || snapshot.PressureLevel == "Critical") level = LogLevel.Error;
 
-                    string logMsg = string.Format("RAM: {0:F1}/{1:F1} MB ({2:F1}% used) | Avail: {3:F1} MB | Commit: {4:F1}/{5:F1} MB ({6:F1}%) | Nonpaged: {7:F1} MB | Pages/s: {8:F1} | Faults/s: {9:F1} | Pressure: {10}",
+                    string logMsg = string.Format("Mode: {0} | RAM: {1:F1}/{2:F1} MB ({3:F1}%) | Avail: {4:F1} MB (Slope: {5:F1} MB/m) | Commit: {6:F1}/{7:F1} MB ({8:F1}%) | Nonpaged: {9:F1} MB | Pages/s: {10:F1} | Faults/s: {11:F1} | Status: {12}",
+                        snapshot.OperatingMode,
                         snapshot.Metrics.UsedPhysicalMB,
                         snapshot.Metrics.TotalPhysicalMB,
                         snapshot.Metrics.MemoryLoadPercentage,
                         snapshot.Metrics.AvailablePhysicalMB,
+                        snapshot.AvailableRamSlopeMBPerMin,
                         snapshot.Metrics.CommittedMB,
                         snapshot.Metrics.CommitLimitMB,
                         snapshot.Metrics.CommitLoadPercentage,
@@ -143,31 +203,8 @@ namespace RAMGuardian.Service
 
         public static string EvaluatePressure(SystemMemoryMetrics m)
         {
-            if (m == null) return "Normal";
-
-            // Multi-criteria composite pressure matrix:
-            // 4 GB Machine Thresholds:
-            // Critical: Available < 150 MB AND (Commit > 90% OR Pages/sec > 2500)
-            // High: Available < 250 MB AND (Commit > 82% OR Pages/sec > 1500)
-            // Elevated: Available < 500 MB OR Commit > 78%
-            // Normal: All other states
-
-            if (m.AvailablePhysicalMB < 150 && (m.CommitLoadPercentage > 90.0 || m.PagesPerSec > 2500))
-            {
-                return "Critical";
-            }
-
-            if (m.AvailablePhysicalMB < 250 && (m.CommitLoadPercentage > 82.0 || m.PagesPerSec > 1500))
-            {
-                return "High";
-            }
-
-            if (m.AvailablePhysicalMB < 500 || m.CommitLoadPercentage > 78.0)
-            {
-                return "Elevated";
-            }
-
-            return "Normal";
+            var analyzer = new TrendAnalyzer();
+            return analyzer.IngestMetrics(m, null, null);
         }
 
         public void Dispose()

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.ServiceProcess;
@@ -28,7 +29,27 @@ namespace RAMGuardian.Service
                     return RunOnce(jsonOutput);
                 }
 
-                if (cmd == "--console" || cmd == "-c" || cmd == "--monitor" || cmd == "-m")
+                if (cmd == "--mode" || cmd == "-m")
+                {
+                    if (args.Length > 1)
+                    {
+                        return SetMode(args[1]);
+                    }
+                    Console.WriteLine("Error: Please specify mode (MonitorOnly, SafeAutomatic, Paused)");
+                    return 1;
+                }
+
+                if (cmd == "--backups" || cmd == "-b")
+                {
+                    return ListBackups();
+                }
+
+                if (cmd == "--restore-all" || cmd == "-r")
+                {
+                    return RestoreAllBackups();
+                }
+
+                if (cmd == "--console" || cmd == "-c" || cmd == "--monitor")
                 {
                     return RunConsole(args);
                 }
@@ -220,6 +241,112 @@ namespace RAMGuardian.Service
                     p.PrivateMB,
                     protLabel);
             }
+
+            if (snapshot.ActiveAlerts != null && snapshot.ActiveAlerts.Count > 0)
+            {
+                Console.WriteLine("---------------------------------------------------------------");
+                Console.ForegroundColor = ConsoleColor.Magenta;
+                Console.WriteLine("ACTIVE DIAGNOSTIC ALERTS & INSIGHTS ({0}):", snapshot.ActiveAlerts.Count);
+                Console.ResetColor();
+                for (int i = 0; i < Math.Min(5, snapshot.ActiveAlerts.Count); i++)
+                {
+                    Console.WriteLine(" * {0}", snapshot.ActiveAlerts[i]);
+                }
+            }
+        }
+
+        private static int SetMode(string mode)
+        {
+            string clean = mode.Trim();
+            if (!clean.Equals("MonitorOnly", StringComparison.OrdinalIgnoreCase) &&
+                !clean.Equals("SafeAutomatic", StringComparison.OrdinalIgnoreCase) &&
+                !clean.Equals("Paused", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Invalid mode '{0}'. Valid options: MonitorOnly, SafeAutomatic, Paused", mode);
+                Console.ResetColor();
+                return 1;
+            }
+
+            var cfgMgr = new RAMGuardian.Configuration.ConfigManager();
+            var cfg = cfgMgr.LoadConfig();
+
+            string exactMode = "MonitorOnly";
+            if (clean.Equals("SafeAutomatic", StringComparison.OrdinalIgnoreCase)) exactMode = "SafeAutomatic";
+            if (clean.Equals("Paused", StringComparison.OrdinalIgnoreCase)) exactMode = "Paused";
+
+            cfg.OperatingMode = exactMode;
+            bool ok = cfgMgr.SaveConfig(cfg);
+
+            if (ok)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("Operating mode successfully changed to: {0}", exactMode);
+                Console.ResetColor();
+                return 0;
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Failed to update config.json.");
+                Console.ResetColor();
+                return 1;
+            }
+        }
+
+        private static int ListBackups()
+        {
+            var bkpMgr = new RAMGuardian.Optimization.BackupManager();
+            var backups = bkpMgr.GetBackups();
+
+            PrintBanner();
+            Console.WriteLine("RAM GUARDIAN MANAGED BACKUPS ({0} total):", backups.Count);
+            Console.WriteLine("---------------------------------------------------------------");
+
+            if (backups.Count == 0)
+            {
+                Console.WriteLine("No backups recorded yet. System remains in original state.");
+                return 0;
+            }
+
+            Console.WriteLine("{0,-32} {1,-14} {2,-12} {3,-10}", "Backup ID", "Created (UTC)", "Entry", "Restored?");
+            Console.WriteLine(new string('-', 72));
+
+            for (int i = 0; i < backups.Count; i++)
+            {
+                var b = backups[i];
+                string name = b.OriginalEntry != null ? b.OriginalEntry.Name : "unknown";
+                string restored = b.IsRestored ? "YES" : "NO (Active)";
+                Console.WriteLine("{0,-32} {1,-14:yyyy-MM-dd} {2,-12} {3,-10}",
+                    b.BackupId, b.CreatedUtc, Truncate(name, 12), restored);
+            }
+
+            return 0;
+        }
+
+        private static int RestoreAllBackups()
+        {
+            var bkpMgr = new RAMGuardian.Optimization.BackupManager();
+            List<string> errors;
+            int count = bkpMgr.RestoreAll(out errors);
+
+            PrintBanner();
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("Restored {0} RAM Guardian managed change(s) back to original state.", count);
+            Console.ResetColor();
+
+            if (errors != null && errors.Count > 0)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("Restore Warnings/Errors:");
+                for (int i = 0; i < errors.Count; i++)
+                {
+                    Console.WriteLine(" - {0}", errors[i]);
+                }
+                Console.ResetColor();
+            }
+
+            return 0;
         }
 
         private static string Truncate(string val, int maxLen)

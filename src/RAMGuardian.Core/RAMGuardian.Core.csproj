@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <ProjectGuid>{2C3D4E5F-6A7B-8C9D-0E1F-2A3B4C5D6E7F}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>RAMGuardian.Core</RootNamespace>
+    <AssemblyName>RAMGuardian.Core</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RAMGuardian.Common\RAMGuardian.Common.csproj">
+      <Project>{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}</Project>
+      <Name>RAMGuardian.Common</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\RAMGuardian.Configuration\RAMGuardian.Configuration.csproj">
+      <Project>{0A1B2C3D-4E5F-6A7B-8C9D-0E1F2A3B4C5D}</Project>
+      <Name>RAMGuardian.Configuration</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\RAMGuardian.Security\RAMGuardian.Security.csproj">
+      <Project>{F6A7B8C9-D0E1-4F2A-3B4C-5D6E7F8A9B0C}</Project>
+      <Name>RAMGuardian.Security</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\RAMGuardian.Optimization\RAMGuardian.Optimization.csproj">
+      <Project>{1B2C3D4E-5F6A-7B8C-9D0E-1F2A3B4C5D6E}</Project>
+      <Name>RAMGuardian.Optimization</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\RAMGuardian.Logging\RAMGuardian.Logging.csproj">
+      <Project>{C3D4E5F6-A7B8-4C9D-0E1F-2A3B4C5D6E7F}</Project>
+      <Name>RAMGuardian.Logging</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Alerts\MemoryAlert.cs" />
+    <Compile Include="Analysis\TrendAnalyzer.cs" />
+    <Compile Include="Analysis\MemoryLeakDetector.cs" />
+    <Compile Include="Analysis\NonpagedPoolTracker.cs" />
+    <Compile Include="Analysis\OptimizationCoordinator.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

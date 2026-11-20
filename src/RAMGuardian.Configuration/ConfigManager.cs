@@ -158,10 +158,25 @@ namespace RAMGuardian.Configuration
             if (c.MonitoringIntervalSeconds < 5) c.MonitoringIntervalSeconds = 5;
             if (c.DashboardRefreshIntervalSeconds < 2) c.DashboardRefreshIntervalSeconds = 2;
             if (c.CooldownMinutes < 1) c.CooldownMinutes = 1;
+            if (c.EdgeSleepingTabsTimeoutSeconds < 30) c.EdgeSleepingTabsTimeoutSeconds = 30;
 
-            if (c.OperatingMode != "MonitorOnly" && c.OperatingMode != "SafeAutomatic" && c.OperatingMode != "Paused")
+            if (c.OperatingMode != "MonitorOnly" &&
+                c.OperatingMode != "BalancedAuto" &&
+                c.OperatingMode != "AggressiveAuto" &&
+                c.OperatingMode != "GamingFocus" &&
+                c.OperatingMode != "Paused")
             {
                 c.OperatingMode = "MonitorOnly";
+            }
+
+            if (c.ApprovedTerminationTargets == null)
+            {
+                c.ApprovedTerminationTargets = new List<string> { "OneDrive", "utweb", "Spotify" };
+            }
+
+            if (c.EdgeProtectedWebsites == null)
+            {
+                c.EdgeProtectedWebsites = new List<string> { "*.google.com", "*.youtube.com", "*.teams.microsoft.com" };
             }
         }
     }

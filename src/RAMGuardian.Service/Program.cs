@@ -35,8 +35,28 @@ namespace RAMGuardian.Service
                     {
                         return SetMode(args[1]);
                     }
-                    Console.WriteLine("Error: Please specify mode (MonitorOnly, SafeAutomatic, Paused)");
+                    Console.WriteLine("Error: Please specify mode: MonitorOnly, BalancedAuto, AggressiveAuto, GamingFocus, Paused");
                     return 1;
+                }
+
+                if (cmd == "--emergency-stop" || cmd == "-stop")
+                {
+                    return SetEmergencyStop(true);
+                }
+
+                if (cmd == "--resume" || cmd == "-resume")
+                {
+                    return SetEmergencyStop(false);
+                }
+
+                if (cmd == "--edge-status" || cmd == "-edge")
+                {
+                    return ShowEdgeStatus();
+                }
+
+                if (cmd == "--edge-restore")
+                {
+                    return RestoreEdgePolicies();
                 }
 
                 if (cmd == "--backups" || cmd == "-b")
@@ -76,7 +96,8 @@ namespace RAMGuardian.Service
             Console.WriteLine("===============================================================");
             Console.WriteLine("   RAM GUARDIAN - Intelligent Windows Resource Monitor v1.0   ");
             Console.WriteLine("   Engineered for 4 GB RAM Windows 11 Systems (ASUS X515EA)    ");
-            Console.WriteLine("   Safety Policy: Default-DENY | Non-Destructive Monitoring   ");
+            Console.WriteLine("   Modes: MonitorOnly | BalancedAuto | AggressiveAuto | Gaming ");
+            Console.WriteLine("   Edge 24/7 Optimizer: Active | Default-DENY Safety Invariant ");
             Console.WriteLine("===============================================================");
             Console.ResetColor();
         }
@@ -87,10 +108,18 @@ namespace RAMGuardian.Service
             Console.WriteLine("Usage: RAMGuardian.Service.exe [option]");
             Console.WriteLine();
             Console.WriteLine("Options:");
-            Console.WriteLine("  --console, -c       Run in interactive live console mode (updates continuously)");
-            Console.WriteLine("  --once, -1          Capture a single read-only snapshot and print to terminal");
-            Console.WriteLine("  --once --json       Capture a single snapshot and print raw JSON");
-            Console.WriteLine("  --help, -h          Show this help text");
+            Console.WriteLine("  --console, -c             Run in interactive live console mode");
+            Console.WriteLine("  --once, -1                Capture a single read-only snapshot and print to terminal");
+            Console.WriteLine("  --once --json             Capture a single snapshot and print raw JSON");
+            Console.WriteLine("  --mode <Name>             Set operating mode: MonitorOnly, BalancedAuto,");
+            Console.WriteLine("                            AggressiveAuto, GamingFocus, Paused");
+            Console.WriteLine("  --emergency-stop          Trip the global emergency stop switch");
+            Console.WriteLine("  --resume                  Clear the emergency stop switch");
+            Console.WriteLine("  --edge-status             Display Microsoft Edge process roles & memory usage");
+            Console.WriteLine("  --edge-restore            Restore Edge group policies to browser defaults");
+            Console.WriteLine("  --backups, -b             List all configuration backups");
+            Console.WriteLine("  --restore-all, -r         Restore all managed system/startup changes");
+            Console.WriteLine("  --help, -h                Show this help text");
             Console.WriteLine();
             Console.WriteLine("When started by Windows Service Control Manager, it automatically runs");
             Console.WriteLine("as the background service 'RAMGuardian' without showing any window.");
@@ -172,6 +201,13 @@ namespace RAMGuardian.Service
             Console.WriteLine("Timestamp (UTC): {0:yyyy-MM-dd HH:mm:ss} | Operating Mode: {1}",
                 snapshot.TimestampUtc, snapshot.OperatingMode);
 
+            if (snapshot.IsEmergencyStopped)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(">>> EMERGENCY STOP SWITCH IS ACTIVE: AUTOMATED ACTIONS HALTED <<<");
+                Console.ResetColor();
+            }
+
             // Pressure Level with Alert Color
             Console.Write("Memory Pressure Status: ");
             switch (snapshot.PressureLevel)
@@ -196,7 +232,8 @@ namespace RAMGuardian.Service
             Console.ForegroundColor = ConsoleColor.White;
             Console.WriteLine("PHYSICAL RAM:  {0,7:F1} MB used / {1,7:F1} MB total ({2,5:F1}% load)",
                 m.UsedPhysicalMB, m.TotalPhysicalMB, m.MemoryLoadPercentage);
-            Console.WriteLine("AVAILABLE RAM: {0,7:F1} MB free physical memory", m.AvailablePhysicalMB);
+            Console.WriteLine("AVAILABLE RAM: {0,7:F1} MB free physical memory (Slope: {1:F1} MB/m)",
+                m.AvailablePhysicalMB, snapshot.AvailableRamSlopeMBPerMin);
             Console.ResetColor();
 
             Console.WriteLine("COMMIT LIMIT:  {0,7:F1} MB commit / {1,7:F1} MB limit ({2,5:F1}% commit load)",
@@ -218,6 +255,18 @@ namespace RAMGuardian.Service
                 Console.WriteLine("COMPRESSION:   Inactive or Not Reported");
             }
 
+            if (snapshot.EdgeStatus != null && snapshot.EdgeStatus.IsRunning)
+            {
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine("EDGE 24/7 OPT: Procs: {0} | RAM: {1:F1} MB | Commit: {2:F1} MB | Tabs: {3} | GPU: {4:F1} MB",
+                    snapshot.EdgeStatus.TotalProcesses,
+                    snapshot.EdgeStatus.TotalWorkingSetMB,
+                    snapshot.EdgeStatus.TotalPrivateMB,
+                    snapshot.EdgeStatus.RendererProcessesCount,
+                    snapshot.EdgeStatus.GpuWorkingSetMB);
+                Console.ResetColor();
+            }
+
             Console.WriteLine("SYSTEM:        CPU: {0:F1}% | Handles: {1} | Threads: {2} | Processes: {3}",
                 m.CpuUtilizationPercentage, m.HandleCount, m.ThreadCount, m.ProcessCount);
 
@@ -225,21 +274,21 @@ namespace RAMGuardian.Service
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("TOP 15 MEMORY CONSUMERS (Physical Working Set & Committed Private):");
             Console.ResetColor();
-            Console.WriteLine("{0,-7} {1,-22} {2,12} {3,12} {4,-10}",
-                "PID", "Process Name", "Working Set", "Private Bytes", "Protected?");
+            Console.WriteLine("{0,-7} {1,-20} {2,11} {3,11} {4,-16}",
+                "PID", "Process Name", "Working Set", "Private Bytes", "Classification");
             Console.WriteLine(new string('-', 68));
 
             int displayCount = Math.Min(15, snapshot.TopProcesses.Count);
             for (int i = 0; i < displayCount; i++)
             {
                 ProcessMemoryInfo p = snapshot.TopProcesses[i];
-                string protLabel = p.IsProtected ? "YES (Safe)" : "User/Other";
-                Console.WriteLine("{0,-7} {1,-22} {2,9:F1} MB {3,9:F1} MB {4,-10}",
+                string classLabel = !string.IsNullOrEmpty(p.Classification) ? p.Classification : (p.IsProtected ? "Protected" : "UserApp");
+                Console.WriteLine("{0,-7} {1,-20} {2,8:F1} MB {3,8:F1} MB {4,-16}",
                     p.ProcessId,
-                    Truncate(p.ProcessName, 22),
+                    Truncate(p.ProcessName, 20),
                     p.WorkingSetMB,
                     p.PrivateMB,
-                    protLabel);
+                    Truncate(classLabel, 16));
             }
 
             if (snapshot.ActiveAlerts != null && snapshot.ActiveAlerts.Count > 0)
@@ -258,22 +307,23 @@ namespace RAMGuardian.Service
         private static int SetMode(string mode)
         {
             string clean = mode.Trim();
-            if (!clean.Equals("MonitorOnly", StringComparison.OrdinalIgnoreCase) &&
-                !clean.Equals("SafeAutomatic", StringComparison.OrdinalIgnoreCase) &&
-                !clean.Equals("Paused", StringComparison.OrdinalIgnoreCase))
+            string exactMode = null;
+            if (clean.Equals("MonitorOnly", StringComparison.OrdinalIgnoreCase)) exactMode = "MonitorOnly";
+            else if (clean.Equals("BalancedAuto", StringComparison.OrdinalIgnoreCase)) exactMode = "BalancedAuto";
+            else if (clean.Equals("AggressiveAuto", StringComparison.OrdinalIgnoreCase)) exactMode = "AggressiveAuto";
+            else if (clean.Equals("GamingFocus", StringComparison.OrdinalIgnoreCase)) exactMode = "GamingFocus";
+            else if (clean.Equals("Paused", StringComparison.OrdinalIgnoreCase)) exactMode = "Paused";
+
+            if (exactMode == null)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("Invalid mode '{0}'. Valid options: MonitorOnly, SafeAutomatic, Paused", mode);
+                Console.WriteLine("Invalid mode '{0}'. Valid options: MonitorOnly, BalancedAuto, AggressiveAuto, GamingFocus, Paused", mode);
                 Console.ResetColor();
                 return 1;
             }
 
             var cfgMgr = new RAMGuardian.Configuration.ConfigManager();
             var cfg = cfgMgr.LoadConfig();
-
-            string exactMode = "MonitorOnly";
-            if (clean.Equals("SafeAutomatic", StringComparison.OrdinalIgnoreCase)) exactMode = "SafeAutomatic";
-            if (clean.Equals("Paused", StringComparison.OrdinalIgnoreCase)) exactMode = "Paused";
 
             cfg.OperatingMode = exactMode;
             bool ok = cfgMgr.SaveConfig(cfg);
@@ -292,6 +342,71 @@ namespace RAMGuardian.Service
                 Console.ResetColor();
                 return 1;
             }
+        }
+
+        private static int SetEmergencyStop(bool stop)
+        {
+            var cfgMgr = new RAMGuardian.Configuration.ConfigManager();
+            var cfg = cfgMgr.LoadConfig();
+            cfg.IsEmergencyStopped = stop;
+            bool ok = cfgMgr.SaveConfig(cfg);
+
+            if (ok)
+            {
+                Console.ForegroundColor = stop ? ConsoleColor.Red : ConsoleColor.Green;
+                Console.WriteLine(stop
+                    ? "EMERGENCY STOP ACTIVATED: All automated optimizations and process closures suspended immediately."
+                    : "EMERGENCY STOP CLEARED: Automated optimizations resumed.");
+                Console.ResetColor();
+                return 0;
+            }
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("Failed to update config.");
+            Console.ResetColor();
+            return 1;
+        }
+
+        private static int ShowEdgeStatus()
+        {
+            PrintBanner();
+            var collector = new RAMGuardian.Monitoring.EdgeProcessCollector();
+            var res = collector.CollectEdgeIntelligence();
+            var m = res.Item1;
+            var procs = res.Item2;
+
+            Console.WriteLine("MICROSOFT EDGE INTELLIGENCE STATUS");
+            Console.WriteLine("---------------------------------------------------------------");
+            Console.WriteLine("Running Status:       {0}", m.IsRunning ? "Active" : "Not Running");
+            Console.WriteLine("Total Edge Processes: {0}", m.TotalProcesses);
+            Console.WriteLine("Total Working Set:    {0:F1} MB", m.TotalWorkingSetMB);
+            Console.WriteLine("Total Private Bytes:  {0:F1} MB", m.TotalPrivateMB);
+            Console.WriteLine("Browser Process:      {0:F1} MB", m.BrowserWorkingSetMB);
+            Console.WriteLine("GPU Process:          {0:F1} MB", m.GpuWorkingSetMB);
+            Console.WriteLine("Renderer Tabs:        {0} ({1:F1} MB total)", m.RendererProcessesCount, m.RenderersWorkingSetMB);
+            Console.WriteLine("Extension Processes:  {0} ({1:F1} MB total)", m.ExtensionProcessesCount, m.ExtensionsWorkingSetMB);
+            Console.WriteLine();
+            Console.WriteLine("EDGE PROCESS INVENTORY ({0} detected):", procs.Count);
+            Console.WriteLine("{0,-8} {1,-16} {2,12} {3,12} {4,-14}", "PID", "Role", "Working Set", "Private Bytes", "Candidate?");
+            Console.WriteLine(new string('-', 66));
+            for (int i = 0; i < procs.Count; i++)
+            {
+                var p = procs[i];
+                Console.WriteLine("{0,-8} {1,-16} {2,9:F1} MB {3,9:F1} MB {4,-14}",
+                    p.ProcessId, p.Role, p.WorkingSetMB, p.PrivateMB, p.IsSleepingCandidate ? "Sleep Target" : "-");
+            }
+            return 0;
+        }
+
+        private static int RestoreEdgePolicies()
+        {
+            PrintBanner();
+            var optimizer = new RAMGuardian.Optimization.EdgeOptimizer();
+            string msg;
+            bool ok = optimizer.RestoreEdgePolicies(out msg);
+            Console.ForegroundColor = ok ? ConsoleColor.Green : ConsoleColor.Yellow;
+            Console.WriteLine(msg);
+            Console.ResetColor();
+            return ok ? 0 : 1;
         }
 
         private static int ListBackups()

@@ -53,8 +53,21 @@ Write-Host "Generating configuration templates..." -ForegroundColor Cyan
 $configTemplate = @'
 {
   "OperatingMode": "MonitorOnly",
+  "IsEmergencyStopped": false,
+  "EdgeOptimizationEnabled": true,
+  "EdgeSleepingTabsTimeoutSeconds": 300,
+  "EdgeEfficiencyModeEnabled": true,
+  "EdgeBackgroundModeDisabled": false,
+  "EdgeStartupBoostDisabled": false,
+  "EdgeProtectedWebsites": [
+    "*.google.com",
+    "*.youtube.com",
+    "*.teams.microsoft.com",
+    "*.zoom.us",
+    "*.github.com"
+  ],
   "MonitoringIntervalSeconds": 15,
-  "DashboardRefreshIntervalSeconds": 5,
+  "DashboardRefreshIntervalSeconds": 4,
   "ElevatedAvailableRamMB": 500.0,
   "HighAvailableRamMB": 250.0,
   "CriticalAvailableRamMB": 150.0,
@@ -68,7 +81,12 @@ $configTemplate = @'
   "LaunchDashboardOnLogin": false,
   "MinimizeDashboardToTray": true,
   "LogRetentionDays": 14,
-  "MaxLogFileSizeBytes": 10485760
+  "MaxLogFileSizeBytes": 10485760,
+  "ApprovedTerminationTargets": [
+    "OneDrive",
+    "utweb",
+    "Spotify"
+  ]
 }
 '@
 Set-Content -Path "$pkgDir\config-templates\config.template.json" -Value $configTemplate -Encoding UTF8

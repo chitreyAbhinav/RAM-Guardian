@@ -135,5 +135,24 @@ namespace RAMGuardian.Security.Policies
             reason = "Standard Application (Default Protection Active)";
             return true;
         }
+
+        public void AddUserProtectedProcess(string processName)
+        {
+            if (string.IsNullOrWhiteSpace(processName)) return;
+            string clean = Path.GetFileNameWithoutExtension(processName).Trim();
+            _userProtectedProcesses.Add(clean);
+            try
+            {
+                var list = new List<string>(_userProtectedProcesses);
+                string json = JsonHelper.Serialize(list, true);
+                string dir = Path.GetDirectoryName(_customConfigPath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+                File.WriteAllText(_customConfigPath, json);
+            }
+            catch { }
+        }
     }
 }

@@ -89,6 +89,16 @@ namespace RAMGuardian.Common.Models
             get { return MemoryCompressionWorkingSetBytes / (1024.0 * 1024.0); }
         }
 
+        public double TotalVirtualMB
+        {
+            get { return CommitLimitMB; }
+        }
+
+        public double AvailableVirtualMB
+        {
+            get { return Math.Max(0.0, CommitLimitMB - CommittedMB); }
+        }
+
         public SystemMemoryMetrics()
         {
             TimestampUtc = DateTime.UtcNow;

@@ -42,6 +42,10 @@
       <Project>{1B2C3D4E-5F6A-7B8C-9D0E-1F2A3B4C5D6E}</Project>
       <Name>RAMGuardian.Optimization</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\src\RAMGuardian.Core\RAMGuardian.Core.csproj">
+      <Project>{2C3D4E5F-6A7B-8C9D-0E1F-2A3B4C5D6E7F}</Project>
+      <Name>RAMGuardian.Core</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\src\RAMGuardian.Service\RAMGuardian.Service.csproj">
       <Project>{D4E5F6A7-B8C9-4D0E-1F2A-3B4C5D6E7F8A}</Project>
       <Name>RAMGuardian.Service</Name>

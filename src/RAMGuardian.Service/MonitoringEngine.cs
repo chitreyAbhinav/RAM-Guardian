@@ -17,6 +17,7 @@ namespace RAMGuardian.Service
     {
         private readonly SystemMemoryCollector _memCollector;
         private readonly ProcessMemoryCollector _procCollector;
+        private readonly EdgeProcessCollector _edgeCollector;
         private readonly FileLogger _logger;
         private readonly SnapshotWriter _snapshotWriter;
         private readonly ConfigManager _configManager;
@@ -49,6 +50,7 @@ namespace RAMGuardian.Service
             _configManager = new ConfigManager();
             _memCollector = new SystemMemoryCollector();
             _procCollector = new ProcessMemoryCollector();
+            _edgeCollector = new EdgeProcessCollector();
             _trendAnalyzer = new TrendAnalyzer(120);
             _leakDetector = new MemoryLeakDetector();
             _poolTracker = new NonpagedPoolTracker();
@@ -91,6 +93,20 @@ namespace RAMGuardian.Service
             var metrics = _memCollector.CollectMetrics();
             var topProcs = _procCollector.GetTopProcesses(20);
 
+            // Collect Microsoft Edge intelligence
+            var edgeResult = _edgeCollector.CollectEdgeIntelligence();
+            var edgeMetrics = edgeResult.Item1;
+            var edgeProcs = edgeResult.Item2;
+
+            // Classify each process using ProcessIntelligenceEngine
+            if (topProcs != null)
+            {
+                for (int i = 0; i < topProcs.Count; i++)
+                {
+                    _optCoordinator.TerminationEngine.IntelligenceEngine.ClassifyProcess(topProcs[i], config);
+                }
+            }
+
             var newAlerts = new List<MemoryAlert>();
 
             // 1. Ingest into Trend Analyzer (Composite Pressure Matrix + Hysteresis)
@@ -102,11 +118,14 @@ namespace RAMGuardian.Service
             // 3. Ingest into Nonpaged Pool Tracker
             _poolTracker.IngestPoolSample(metrics, newAlerts);
 
-            // 4. Safe Optimization Coordinator (if in SafeAutomatic mode & sustained pressure)
+            // 4. Safe & Controlled Optimization Coordinator
             string optSummary;
-            if (_optCoordinator.TryExecuteSafeOptimization(config, _trendAnalyzer, newAlerts, out optSummary))
+            if (_optCoordinator.EvaluateAndOptimize(config, _trendAnalyzer, topProcs, edgeMetrics, newAlerts, out optSummary))
             {
-                _logger.Info("OPTIMIZATION_EXECUTED", optSummary);
+                if (!string.IsNullOrEmpty(optSummary))
+                {
+                    _logger.Info("OPTIMIZATION_EXECUTED", optSummary);
+                }
             }
 
             // Append new alerts to recent alerts list
@@ -140,9 +159,12 @@ namespace RAMGuardian.Service
                 ServiceUptimeSeconds = Math.Round((DateTime.UtcNow - _startTime).TotalSeconds, 1),
                 AvailableRamSlopeMBPerMin = _trendAnalyzer.CalculateAvailableRamRateOfChangeMBPerMin(),
                 NonpagedPoolBaselineMB = _poolTracker.BaselineMB,
+                IsEmergencyStopped = config.IsEmergencyStopped,
                 ActiveAlerts = alertStrings,
                 Metrics = metrics,
-                TopProcesses = topProcs
+                EdgeStatus = edgeMetrics,
+                TopProcesses = topProcs,
+                EdgeProcesses = edgeProcs
             };
 
             try

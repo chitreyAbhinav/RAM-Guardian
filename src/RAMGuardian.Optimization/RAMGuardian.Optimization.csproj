@@ -41,6 +41,8 @@
     <Compile Include="BackupManager.cs" />
     <Compile Include="StartupScanner.cs" />
     <Compile Include="Actions\ActionRegistry.cs" />
+    <Compile Include="ProcessTerminationEngine.cs" />
+    <Compile Include="EdgeOptimizer.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

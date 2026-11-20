@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Microsoft.Win32;
 using RAMGuardian.Common.Models;
 using RAMGuardian.Common.Native;
 using RAMGuardian.Common.Serialization;
 using RAMGuardian.Configuration;
 using RAMGuardian.Configuration.Models;
+using RAMGuardian.Core.Alerts;
+using RAMGuardian.Core.Analysis;
 using RAMGuardian.Logging;
 using RAMGuardian.Monitoring;
 using RAMGuardian.Optimization;
@@ -21,14 +24,15 @@ namespace RAMGuardian.Tests
         static int Main(string[] args)
         {
             Console.WriteLine("===============================================================");
-            Console.WriteLine("        RAM GUARDIAN - AUTOMATED TEST SUITE (M1 + M2)         ");
+            Console.WriteLine("        RAM GUARDIAN - COMPREHENSIVE AUTOMATED TEST SUITE      ");
+            Console.WriteLine("   ASUS VivoBook X515EA 4 GB RAM Profile & Redesign Verification");
             Console.WriteLine("===============================================================");
             Console.WriteLine();
 
             int passed = 0;
             int failed = 0;
 
-            // --- Milestone 1 Tests ---
+            // --- Milestone 1 Tests (Hardware Diagnostics & Native Counters) ---
             RunTest("Test 1: Native GlobalMemoryStatusEx & Memory Readings", () =>
             {
                 var mem = new NativeMethods.MEMORYSTATUSEX();
@@ -152,7 +156,6 @@ namespace RAMGuardian.Tests
             }, ref passed, ref failed);
 
             // --- Milestone 2 Tests (Safety Framework & Protection Registries) ---
-
             RunTest("Test 9: Process Protection Policy & Default-DENY", () =>
             {
                 var policy = new ProcessProtectionPolicy();
@@ -311,8 +314,249 @@ namespace RAMGuardian.Tests
 
                 var safeAutoConfig = new GuardianConfig { OperatingMode = "SafeAutomatic" };
                 bool canRunInSafeAuto = action.CanExecute(safeAutoConfig, out reason);
-                // Can execute should be true since OneDrive exists in live HKCU Run
                 Assert(canRunInSafeAuto, "Action permitted in SafeAutomatic mode when entry exists");
+            }, ref passed, ref failed);
+
+            // --- Redesign Tests: 5 Operating Modes, Edge 24/7, Process Intelligence & Killswitch ---
+
+            RunTest("Test 16: 5 Operating Modes & Global Emergency Killswitch", () =>
+            {
+                var cfg = new GuardianConfig();
+                string[] validModes = new string[] { "MonitorOnly", "BalancedAuto", "AggressiveAuto", "GamingFocus", "Paused" };
+
+                for (int i = 0; i < validModes.Length; i++)
+                {
+                    cfg.OperatingMode = validModes[i];
+                    Assert(cfg.OperatingMode == validModes[i], string.Format("Mode '{0}' successfully assigned", validModes[i]));
+                }
+
+                // Verify Emergency Killswitch blocks action
+                cfg.IsEmergencyStopped = true;
+                var coord = new OptimizationCoordinator();
+                string summary;
+                bool executed = coord.EvaluateAndOptimize(cfg, new TrendAnalyzer(), new List<ProcessMemoryInfo>(), new EdgeMetrics(), null, out summary);
+                Assert(!executed, "OptimizationCoordinator refused action when Emergency Stop is ACTIVE");
+                Assert(summary.Contains("Emergency Stop"), "Summary correctly indicates Emergency Stop is active");
+
+                var termEngine = new ProcessTerminationEngine();
+                var dummyTarget = new ProcessMemoryInfo { ProcessId = 1234, ProcessName = "Spotify" };
+                string termAudit;
+                bool closed = termEngine.TryGraduatedClosure(dummyTarget, cfg, out termAudit);
+                Assert(!closed, "Termination engine refused action when Emergency Stop is ACTIVE");
+                Assert(termAudit.Contains("Emergency Stop"), "Audit message notes Emergency Stop is ACTIVE");
+            }, ref passed, ref failed);
+
+            RunTest("Test 17: Process Intelligence Engine (9-Tier Immunity Classification)", () =>
+            {
+                var engine = new ProcessIntelligenceEngine();
+                var config = new GuardianConfig { OperatingMode = "AggressiveAuto" };
+
+                // 1. Windows Core
+                var pExplorer = new ProcessMemoryInfo { ProcessId = 100, ProcessName = "explorer" };
+                engine.ClassifyProcess(pExplorer, config);
+                Assert(pExplorer.IsProtected, "Explorer is protected");
+                Assert(!pExplorer.IsTerminationEligible, "Explorer is immune from termination");
+
+                // 2. Security Software
+                var pDefender = new ProcessMemoryInfo { ProcessId = 101, ProcessName = "MsMpEng" };
+                engine.ClassifyProcess(pDefender, config);
+                Assert(pDefender.Classification == "SecuritySoftware", "Defender classified as SecuritySoftware");
+                Assert(pDefender.IsProtected, "Defender is protected");
+                Assert(!pDefender.IsTerminationEligible, "Defender is immune from termination");
+
+                // 3. Academic Testing (Safe Exam Browser)
+                var pSeb = new ProcessMemoryInfo { ProcessId = 102, ProcessName = "SafeExamBrowser" };
+                engine.ClassifyProcess(pSeb, config);
+                Assert(pSeb.Classification == "AcademicTesting", "SEB classified as AcademicTesting");
+                Assert(pSeb.IsProtected, "Safe Exam Browser is strictly protected");
+                Assert(!pSeb.IsTerminationEligible, "Safe Exam Browser is immune from termination");
+
+                // 4. User Custom Scripting (AutoHotkey scripts)
+                var pAhk1 = new ProcessMemoryInfo { ProcessId = 103, ProcessName = "ShortcutSwap.ahk" };
+                engine.ClassifyProcess(pAhk1, config);
+                Assert(pAhk1.Classification == "UserScripting", "ShortcutSwap.ahk classified as UserScripting");
+                Assert(pAhk1.IsProtected, "ShortcutSwap.ahk is protected");
+                Assert(!pAhk1.IsTerminationEligible, "ShortcutSwap.ahk is immune from termination");
+
+                var pAhk2 = new ProcessMemoryInfo { ProcessId = 104, ProcessName = "WindowButtonDisable.ahk" };
+                engine.ClassifyProcess(pAhk2, config);
+                Assert(pAhk2.IsProtected, "WindowButtonDisable.ahk is protected");
+                Assert(!pAhk2.IsTerminationEligible, "WindowButtonDisable.ahk is immune from termination");
+
+                var pIdm = new ProcessMemoryInfo { ProcessId = 105, ProcessName = "IDMan" };
+                engine.ClassifyProcess(pIdm, config);
+                Assert(pIdm.IsProtected, "IDMan is protected");
+                Assert(!pIdm.IsTerminationEligible, "IDMan is immune from termination");
+
+                var pFilee = new ProcessMemoryInfo { ProcessId = 106, ProcessName = "Filee" };
+                engine.ClassifyProcess(pFilee, config);
+                Assert(pFilee.IsProtected, "Filee is protected");
+                Assert(!pFilee.IsTerminationEligible, "Filee is immune from termination");
+
+                // 5. Development Tools
+                var pCode = new ProcessMemoryInfo { ProcessId = 107, ProcessName = "code" };
+                engine.ClassifyProcess(pCode, config);
+                Assert(pCode.Classification == "DevEnvironment", "VS Code classified as DevEnvironment");
+                Assert(pCode.IsProtected, "VS Code is protected");
+
+                var pNode = new ProcessMemoryInfo { ProcessId = 108, ProcessName = "node" };
+                engine.ClassifyProcess(pNode, config);
+                Assert(pNode.IsProtected, "Node.js is protected");
+
+                // 6. Virtual Machines
+                var pVm = new ProcessMemoryInfo { ProcessId = 109, ProcessName = "vmware-vmx" };
+                engine.ClassifyProcess(pVm, config);
+                Assert(pVm.Classification == "VirtualMachine", "VMware classified as VirtualMachine");
+                Assert(pVm.IsProtected, "VMware is protected");
+
+                // 7. Essential Hardware (ASUS)
+                var pAsus = new ProcessMemoryInfo { ProcessId = 110, ProcessName = "AsusAppService" };
+                engine.ClassifyProcess(pAsus, config);
+                Assert(pAsus.IsProtected, "ASUS service is protected");
+
+                // 8. Standard Unknown App (Default-DENY)
+                var pUnknown = new ProcessMemoryInfo { ProcessId = 111, ProcessName = "RandomThirdPartyApp" };
+                engine.ClassifyProcess(pUnknown, config);
+                Assert(!pUnknown.IsTerminationEligible, "Unknown application denied termination by Default-DENY");
+
+                // 9. Approved Background Target in AggressiveAuto
+                var pApproved = new ProcessMemoryInfo { ProcessId = 112, ProcessName = "OneDrive" };
+                engine.ClassifyProcess(pApproved, config);
+                Assert(pApproved.IsTerminationEligible, "OneDrive is eligible in AggressiveAuto");
+            }, ref passed, ref failed);
+
+            RunTest("Test 18: Microsoft Edge Role Classifier & 24/7 Policy Optimization", () =>
+            {
+                // Verify Command Line Role Classification
+                string roleGpu = EdgeProcessCollector.DetermineRole("msedge.exe --type=gpu-process --field-trial-handle=123", false);
+                Assert(roleGpu == "Gpu", "GPU process identified correctly");
+
+                string roleRenderer = EdgeProcessCollector.DetermineRole("msedge.exe --type=renderer --extension-process", false);
+                Assert(roleRenderer == "Extension", "Extension process identified correctly");
+
+                string roleTab = EdgeProcessCollector.DetermineRole("msedge.exe --type=renderer --origin-trial-disabled-features", false);
+                Assert(roleTab == "Renderer", "Renderer Tab identified correctly");
+
+                string roleCrashpad = EdgeProcessCollector.DetermineRole("msedge.exe --type=crashpad-handler", false);
+                Assert(roleCrashpad == "Crashpad", "Crashpad handler identified correctly");
+
+                string roleBrowser = EdgeProcessCollector.DetermineRole("msedge.exe", true);
+                Assert(roleBrowser == "Browser", "Browser parent identified correctly");
+
+                // Verify Registry Policy Application and Rollback
+                string testKeyPath = @"Software\RAMGuardianTest\EdgePolicies";
+                var opt = new EdgeOptimizer(null, null, testKeyPath);
+                var cfg = new GuardianConfig
+                {
+                    OperatingMode = "BalancedAuto",
+                    EdgeOptimizationEnabled = true,
+                    EdgeSleepingTabsTimeoutSeconds = 60,
+                    EdgeEfficiencyModeEnabled = true,
+                    EdgeBackgroundModeDisabled = true
+                };
+
+                string applyMsg;
+                bool applied = opt.OptimizeEdgePolicies(cfg, null, out applyMsg);
+                Assert(applied, "Edge policies applied successfully: " + applyMsg);
+
+                // Verify keys written to test key path
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(testKeyPath, false))
+                {
+                    Assert(key != null, "Policy key exists in registry");
+                    object sleepTimeout = key.GetValue("SleepingTabsTimeout");
+                    Assert(sleepTimeout != null && Convert.ToInt32(sleepTimeout) == 60, "SleepingTabsTimeout is set to 60s");
+
+                    object effMode = key.GetValue("EfficiencyModeEnabled");
+                    Assert(effMode != null && Convert.ToInt32(effMode) == 1, "EfficiencyModeEnabled is set to 1");
+                }
+
+                // Restore policies
+                string restoreMsg;
+                bool restored = opt.RestoreEdgePolicies(out restoreMsg);
+                Assert(restored, "Edge policies cleanly restored");
+
+                // Verify keys deleted/restored
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(testKeyPath, false))
+                {
+                    if (key != null)
+                    {
+                        object sleepTimeout = key.GetValue("SleepingTabsTimeout");
+                        Assert(sleepTimeout == null, "SleepingTabsTimeout successfully removed on restore");
+                    }
+                }
+
+                try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\RAMGuardianTest", false); } catch { }
+            }, ref passed, ref failed);
+
+            RunTest("Test 19: Graduated 4-Level Process Termination Engine Safety Invariants", () =>
+            {
+                var termEngine = new ProcessTerminationEngine();
+
+                // 1. Rejection in MonitorOnly Mode
+                var cfgMonitor = new GuardianConfig { OperatingMode = "MonitorOnly" };
+                var target = new ProcessMemoryInfo { ProcessId = 5000, ProcessName = "OneDrive" };
+                string audit;
+                bool ok = termEngine.TryGraduatedClosure(target, cfgMonitor, out audit);
+                Assert(!ok, "Closure refused in MonitorOnly mode");
+                Assert(audit.Contains("prohibited in mode 'MonitorOnly'"), "Audit cites MonitorOnly prohibition");
+
+                // 2. Rejection of Protected Targets
+                var cfgAggressive = new GuardianConfig { OperatingMode = "AggressiveAuto" };
+                var protTarget = new ProcessMemoryInfo { ProcessId = 5001, ProcessName = "SafeExamBrowser" };
+                ok = termEngine.TryGraduatedClosure(protTarget, cfgAggressive, out audit);
+                Assert(!ok, "Closure refused for SafeExamBrowser");
+                Assert(audit.Contains("PROTECTED"), "Audit cites process protection invariant");
+
+                // 3. Rejection of Unapproved Target (Default-DENY)
+                var unapprovedTarget = new ProcessMemoryInfo { ProcessId = 5002, ProcessName = "CustomEditorApp" };
+                ok = termEngine.TryGraduatedClosure(unapprovedTarget, cfgAggressive, out audit);
+                Assert(!ok, "Closure refused for unapproved custom application");
+                Assert(audit.Contains("Default-DENY"), "Audit cites Default-DENY protection");
+
+                // 4. Rejection when Emergency Stop is Active
+                var cfgEmergency = new GuardianConfig { OperatingMode = "AggressiveAuto", IsEmergencyStopped = true };
+                ok = termEngine.TryGraduatedClosure(target, cfgEmergency, out audit);
+                Assert(!ok, "Closure refused when Emergency Stop is Active");
+                Assert(audit.Contains("Emergency Stop"), "Audit cites Emergency Stop switch");
+            }, ref passed, ref failed);
+
+            RunTest("Test 20: Optimization Coordinator End-to-End Across All 5 Operating Modes", () =>
+            {
+                var coord = new OptimizationCoordinator();
+                var trend = new TrendAnalyzer();
+                var procs = new List<ProcessMemoryInfo>
+                {
+                    new ProcessMemoryInfo { ProcessId = 1, ProcessName = "System" },
+                    new ProcessMemoryInfo { ProcessId = 2, ProcessName = "MsMpEng" },
+                    new ProcessMemoryInfo { ProcessId = 3, ProcessName = "OneDrive" }
+                };
+                var edge = new EdgeMetrics { IsRunning = true, TotalProcesses = 5 };
+                string summary;
+
+                // 1. Paused Mode: Zero Actions
+                var cfgPaused = new GuardianConfig { OperatingMode = "Paused" };
+                bool runPaused = coord.EvaluateAndOptimize(cfgPaused, trend, procs, edge, null, out summary);
+                Assert(!runPaused, "No optimization in Paused mode");
+                Assert(summary.Contains("Paused"), "Summary indicates system is Paused");
+
+                // 2. MonitorOnly Mode: Zero Actions
+                var cfgMonitor = new GuardianConfig { OperatingMode = "MonitorOnly" };
+                bool runMonitor = coord.EvaluateAndOptimize(cfgMonitor, trend, procs, edge, null, out summary);
+                Assert(!runMonitor, "No optimization in MonitorOnly mode");
+                Assert(summary.Contains("MonitorOnly"), "Summary indicates MonitorOnly mode");
+
+                // 3. BalancedAuto Mode: Edge Optimization Applied, No Process Terminations on Normal Pressure
+                var cfgBalanced = new GuardianConfig { OperatingMode = "BalancedAuto", EdgeOptimizationEnabled = true };
+                var alerts = new List<MemoryAlert>();
+                coord.EvaluateAndOptimize(cfgBalanced, trend, procs, edge, alerts, out summary);
+                // Clean up edge policies
+                coord.EdgeOptimizer.RestoreEdgePolicies(out summary);
+
+                // 4. Emergency Stop: Immediate Suspension
+                var cfgEmerg = new GuardianConfig { OperatingMode = "BalancedAuto", IsEmergencyStopped = true };
+                bool runEmerg = coord.EvaluateAndOptimize(cfgEmerg, trend, procs, edge, null, out summary);
+                Assert(!runEmerg, "No optimization when Emergency Stop active");
+                Assert(summary.Contains("Emergency Stop"), "Summary indicates Emergency Stop active");
             }, ref passed, ref failed);
 
             Console.WriteLine();
@@ -327,7 +571,7 @@ namespace RAMGuardian.Tests
 
         private static void RunTest(string name, Action testAction, ref int passed, ref int failed)
         {
-            Console.Write("{0,-60} ... ", name);
+            Console.Write("{0,-62} ... ", name);
             try
             {
                 testAction();

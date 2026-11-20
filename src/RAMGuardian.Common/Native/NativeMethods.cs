@@ -71,7 +71,7 @@ namespace RAMGuardian.Common.Native
             public IntPtr PrivateUsage;
         }
 
-        [DllImport("psapi.dll", SetLastError = true)]
+        [DllImport("psapi.dll", SetLastError = true, EntryPoint = "GetProcessMemoryInfo")]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool K32GetProcessMemoryInfo(IntPtr hProcess, out PROCESS_MEMORY_COUNTERS_EX counters, int cb);
 

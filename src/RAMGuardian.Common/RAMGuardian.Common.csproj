@@ -22,6 +22,7 @@
     <Compile Include="Native\NativeMethods.cs" />
     <Compile Include="Models\SystemMemoryMetrics.cs" />
     <Compile Include="Models\ProcessMemoryInfo.cs" />
+    <Compile Include="Models\EdgeMetrics.cs" />
     <Compile Include="Models\StateSnapshot.cs" />
     <Compile Include="Serialization\JsonHelper.cs" />
   </ItemGroup>

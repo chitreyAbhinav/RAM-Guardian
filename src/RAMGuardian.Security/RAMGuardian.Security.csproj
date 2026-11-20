@@ -22,11 +22,16 @@
       <Project>{A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D}</Project>
       <Name>RAMGuardian.Common</Name>
     </ProjectReference>
+    <ProjectReference Include="..\RAMGuardian.Configuration\RAMGuardian.Configuration.csproj">
+      <Project>{0A1B2C3D-4E5F-6A7B-8C9D-0E1F2A3B4C5D}</Project>
+      <Name>RAMGuardian.Configuration</Name>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Policies\ProcessProtectionPolicy.cs" />
     <Compile Include="Policies\ServiceProtectionPolicy.cs" />
     <Compile Include="Policies\StartupProtectionPolicy.cs" />
+    <Compile Include="Policies\ProcessIntelligenceEngine.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

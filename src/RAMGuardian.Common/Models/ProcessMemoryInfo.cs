@@ -8,12 +8,22 @@ namespace RAMGuardian.Common.Models
         public string ProcessName { get; set; }
         public long WorkingSetBytes { get; set; }
         public long PrivateBytes { get; set; }
+        public double CpuPercent { get; set; }
         public string ExecutablePath { get; set; }
         public string MainWindowTitle { get; set; }
         public bool HasWindow { get; set; }
         public DateTime? StartTime { get; set; }
+        public double LifetimeHours { get; set; }
+
+        // Intelligence & Classification Tier
+        public string Classification { get; set; }
+        public double ClassificationConfidence { get; set; }
         public bool IsProtected { get; set; }
         public string ProtectionReason { get; set; }
+
+        // Controlled Optimization Eligibility
+        public bool IsTerminationEligible { get; set; }
+        public string EligibilityReason { get; set; }
 
         public double WorkingSetMB
         {
@@ -31,6 +41,11 @@ namespace RAMGuardian.Common.Models
             ExecutablePath = string.Empty;
             MainWindowTitle = string.Empty;
             ProtectionReason = string.Empty;
+            Classification = "Unknown";
+            ClassificationConfidence = 0.5;
+            EligibilityReason = "Protected by default policy";
+            IsProtected = true;
+            IsTerminationEligible = false;
         }
     }
 }

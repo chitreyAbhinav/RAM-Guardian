@@ -21,6 +21,7 @@ namespace RAMGuardian.Dashboard
         private readonly BackupManager _backupManager;
         private readonly EdgeOptimizer _edgeOptimizer;
         private readonly ProcessProtectionPolicy _protectionPolicy;
+        private readonly OneClickOptimizer _oneClickOptimizer;
         private readonly FileLogger _logger;
         private Timer _refreshTimer;
         private NotifyIcon _trayIcon;
@@ -35,8 +36,11 @@ namespace RAMGuardian.Dashboard
         private Label _lblSubtitle;
         private Label _lblPressureBadge;
         private ComboBox _cbTopMode;
+        private DarkButton _btnHeaderOptimize;
         private DarkButton _btnEmergencyStop;
         private Label _lblEmergencyBanner;
+        private Label _lblToastBanner;
+        private Timer _toastTimer;
 
         // Navigation Sidebar
         private Panel _pnlSidebar;
@@ -54,6 +58,8 @@ namespace RAMGuardian.Dashboard
         private Label _lblOvEdge;
         private Label _lblOvStability;
         private ListBox _lbOvAlerts;
+        private DarkButton _btnQuickOptimize;
+        private DarkButton _btnEdgeQuickOpt;
 
         // Section 2: Memory Monitor Controls
         private Label _lblMonPhysical;
@@ -126,6 +132,7 @@ namespace RAMGuardian.Dashboard
             _logger = new FileLogger();
             _edgeOptimizer = new EdgeOptimizer(_backupManager, _logger);
             _protectionPolicy = new ProcessProtectionPolicy();
+            _oneClickOptimizer = new OneClickOptimizer(_edgeOptimizer, _protectionPolicy, _logger);
             _currentConfig = _configManager.LoadConfig();
 
             // Auto-detect if Windows background service is active; if not, run embedded engine
@@ -228,8 +235,8 @@ namespace RAMGuardian.Dashboard
                 ForeColor = Color.FromArgb(100, 220, 140),
                 BackColor = Color.FromArgb(30, 45, 40),
                 TextAlign = ContentAlignment.MiddleCenter,
-                Size = new Size(110, 28),
-                Location = new Point(560, 18)
+                Size = new Size(100, 28),
+                Location = new Point(465, 18)
             };
 
             var lblModeTag = new Label
@@ -237,7 +244,7 @@ namespace RAMGuardian.Dashboard
                 Text = "Mode:",
                 ForeColor = Color.FromArgb(160, 165, 185),
                 AutoSize = true,
-                Location = new Point(690, 23)
+                Location = new Point(578, 23)
             };
 
             _cbTopMode = new ComboBox
@@ -247,21 +254,33 @@ namespace RAMGuardian.Dashboard
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Segoe UI", 9f),
-                Width = 140,
-                Location = new Point(740, 20)
+                Width = 120,
+                Location = new Point(625, 20)
             };
             _cbTopMode.Items.AddRange(new object[] { "MonitorOnly", "BalancedAuto", "AggressiveAuto", "GamingFocus", "Paused" });
             _cbTopMode.SelectedItem = _currentConfig.OperatingMode;
             _cbTopMode.SelectedIndexChanged += OnTopModeChanged;
 
+            _btnHeaderOptimize = new DarkButton
+            {
+                Text = "⚡ OPTIMIZE NOW",
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                NormalBackColor = Color.FromArgb(0, 180, 216),
+                ForeColor = Color.Black,
+                Size = new Size(140, 32),
+                Location = new Point(760, 17),
+                AccentColor = Color.FromArgb(255, 255, 255)
+            };
+            _btnHeaderOptimize.Click += OnOneClickOptimizeClicked;
+
             _btnEmergencyStop = new DarkButton
             {
                 Text = "EMERGENCY STOP",
                 Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                BackColor = _currentConfig.IsEmergencyStopped ? Color.FromArgb(239, 71, 111) : Color.FromArgb(50, 24, 30),
+                NormalBackColor = _currentConfig.IsEmergencyStopped ? Color.FromArgb(239, 71, 111) : Color.FromArgb(50, 24, 30),
                 ForeColor = Color.White,
-                Size = new Size(160, 32),
-                Location = new Point(900, 17),
+                Size = new Size(150, 32),
+                Location = new Point(915, 17),
                 AccentColor = Color.FromArgb(239, 71, 111)
             };
             _btnEmergencyStop.Click += OnEmergencyStopClicked;
@@ -283,6 +302,7 @@ namespace RAMGuardian.Dashboard
             pnlHeader.Controls.Add(_lblPressureBadge);
             pnlHeader.Controls.Add(lblModeTag);
             pnlHeader.Controls.Add(_cbTopMode);
+            pnlHeader.Controls.Add(_btnHeaderOptimize);
             pnlHeader.Controls.Add(_btnEmergencyStop);
 
             // Left Sidebar
@@ -375,9 +395,30 @@ namespace RAMGuardian.Dashboard
                 _pnlContent.Controls.Add(_sectionPanels[i]);
             }
 
+            // Toast Banner Setup
+            _toastTimer = new Timer { Interval = 6000 };
+            _toastTimer.Tick += (s, e) =>
+            {
+                _toastTimer.Stop();
+                _lblToastBanner.Visible = false;
+            };
+
+            _lblToastBanner = new Label
+            {
+                Dock = DockStyle.Top,
+                Height = 32,
+                BackColor = Color.FromArgb(16, 185, 129),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                Text = "",
+                TextAlign = ContentAlignment.MiddleCenter,
+                Visible = false
+            };
+
             // Assembly to Form
             Controls.Add(_pnlContent);
             Controls.Add(_pnlSidebar);
+            Controls.Add(_lblToastBanner);
             Controls.Add(_lblEmergencyBanner);
             Controls.Add(pnlHeader);
             Controls.Add(pnlFooter);
@@ -411,10 +452,23 @@ namespace RAMGuardian.Dashboard
 
             // Left Top: RAM Meter Card
             var cardMeter = new DarkCardPanel { Location = new Point(8, 8), Size = new Size(280, 230) };
-            var lblMeterTitle = new Label { Text = "RAM LOAD (GOAL: 65-70%)", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = Color.FromArgb(0, 180, 216), Location = new Point(14, 12), AutoSize = true };
-            _ramMeter = new MemoryMeterControl { Location = new Point(65, 45), Size = new Size(150, 150) };
+            var lblMeterTitle = new Label { Text = "RAM LOAD (GOAL: 65-70%)", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = Color.FromArgb(0, 180, 216), Location = new Point(14, 10), AutoSize = true };
+            _ramMeter = new MemoryMeterControl { Location = new Point(70, 32), Size = new Size(140, 140) };
+            _btnQuickOptimize = new DarkButton
+            {
+                Text = "⚡ OPTIMIZE RAM & EDGE NOW",
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                NormalBackColor = Color.FromArgb(0, 180, 216),
+                ForeColor = Color.Black,
+                Size = new Size(252, 34),
+                Location = new Point(14, 182),
+                AccentColor = Color.FromArgb(255, 255, 255)
+            };
+            _btnQuickOptimize.Click += OnOneClickOptimizeClicked;
+
             cardMeter.Controls.Add(lblMeterTitle);
             cardMeter.Controls.Add(_ramMeter);
+            cardMeter.Controls.Add(_btnQuickOptimize);
 
             // Middle Top: Commit Card
             var cardCommit = new DarkCardPanel { Location = new Point(298, 8), Size = new Size(300, 230) };
@@ -427,11 +481,23 @@ namespace RAMGuardian.Dashboard
             var cardEdge = new DarkCardPanel { Location = new Point(608, 8), Size = new Size(320, 230) };
             var lblEdgeTitle = new Label { Text = "24/7 MICROSOFT EDGE GUARDIAN", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = Color.FromArgb(0, 180, 216), Location = new Point(14, 12), AutoSize = true };
             _lblOvEdge = new Label { Text = "Scanning Edge processes...", Font = new Font("Segoe UI", 9f), ForeColor = Color.FromArgb(210, 215, 230), Location = new Point(14, 40), Size = new Size(290, 140) };
-            var btnGoEdge = new DarkButton { Text = "Manage Edge ➜", Location = new Point(14, 185), Size = new Size(140, 28) };
+            var btnGoEdge = new DarkButton { Text = "Manage Edge ➜", Location = new Point(14, 185), Size = new Size(135, 28) };
             btnGoEdge.Click += (s, e) => SwitchSection(3);
+            _btnEdgeQuickOpt = new DarkButton
+            {
+                Text = "⚡ Trim Edge RAM",
+                Location = new Point(155, 185),
+                Size = new Size(150, 28),
+                NormalBackColor = Color.FromArgb(0, 150, 190),
+                ForeColor = Color.White,
+                AccentColor = Color.FromArgb(0, 210, 255)
+            };
+            _btnEdgeQuickOpt.Click += OnOneClickOptimizeClicked;
+
             cardEdge.Controls.Add(lblEdgeTitle);
             cardEdge.Controls.Add(_lblOvEdge);
             cardEdge.Controls.Add(btnGoEdge);
+            cardEdge.Controls.Add(_btnEdgeQuickOpt);
 
             // Left Bottom: Stability Card & Live Trend Graph
             var cardTrend = new DarkCardPanel { Location = new Point(8, 248), Size = new Size(590, 240) };
@@ -604,11 +670,11 @@ namespace RAMGuardian.Dashboard
         {
             var pnl = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
 
-            var cardEdgeInfo = new DarkCardPanel { Location = new Point(8, 8), Size = new Size(910, 160) };
+            var cardEdgeInfo = new DarkCardPanel { Location = new Point(8, 8), Size = new Size(910, 185) };
             var lblEdgeHead = new Label { Text = "MICROSOFT EDGE 24/7 GUARDIAN STATUS", Font = new Font("Segoe UI", 10f, FontStyle.Bold), ForeColor = Color.FromArgb(0, 180, 216), Location = new Point(14, 12), AutoSize = true };
-            _lblEdgeSummary = new Label { Text = "Scanning Edge instances...", Font = new Font("Segoe UI", 9f), ForeColor = Color.White, Location = new Point(14, 38), Size = new Size(520, 110) };
+            _lblEdgeSummary = new Label { Text = "Scanning Edge instances...", Font = new Font("Segoe UI", 9f), ForeColor = Color.White, Location = new Point(14, 38), Size = new Size(520, 130) };
 
-            var pnlControls = new Panel { Location = new Point(545, 12), Size = new Size(350, 135) };
+            var pnlControls = new Panel { Location = new Point(545, 12), Size = new Size(350, 165) };
             var lblTimeout = new Label { Text = "Sleeping Tabs Timeout:", Location = new Point(0, 5), AutoSize = true, ForeColor = Color.FromArgb(160, 165, 185) };
             _cbEdgeSleepTimeout = new ComboBox
             {
@@ -625,11 +691,23 @@ namespace RAMGuardian.Dashboard
             _chkEdgeEfficiency = new CheckBox { Text = "Enable Browser Efficiency Mode", Location = new Point(0, 36), AutoSize = true, ForeColor = Color.White, Checked = true };
             _chkEdgeBackgroundDisable = new CheckBox { Text = "Disable Background Mode on Exit", Location = new Point(0, 62), AutoSize = true, ForeColor = Color.White, Checked = true };
 
-            _btnEdgeApplyPolicies = new DarkButton { Text = "Apply Policies Now", Location = new Point(0, 95), Size = new Size(160, 30), AccentColor = Color.FromArgb(0, 180, 216) };
+            _btnEdgeApplyPolicies = new DarkButton { Text = "Apply Policies Now", Location = new Point(0, 95), Size = new Size(160, 28), AccentColor = Color.FromArgb(0, 180, 216) };
             _btnEdgeApplyPolicies.Click += OnEdgeApplyPoliciesClicked;
 
-            _btnEdgeRestoreDefaults = new DarkButton { Text = "Restore Edge Defaults", Location = new Point(170, 95), Size = new Size(165, 30) };
+            _btnEdgeRestoreDefaults = new DarkButton { Text = "Restore Edge Defaults", Location = new Point(170, 95), Size = new Size(165, 28) };
             _btnEdgeRestoreDefaults.Click += OnEdgeRestoreDefaultsClicked;
+
+            var btnEdgeTrimAll = new DarkButton
+            {
+                Text = "⚡ 1-Click Trim Edge & System RAM",
+                Location = new Point(0, 128),
+                Size = new Size(335, 30),
+                NormalBackColor = Color.FromArgb(0, 180, 216),
+                ForeColor = Color.Black,
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                AccentColor = Color.FromArgb(255, 255, 255)
+            };
+            btnEdgeTrimAll.Click += OnOneClickOptimizeClicked;
 
             pnlControls.Controls.Add(lblTimeout);
             pnlControls.Controls.Add(_cbEdgeSleepTimeout);
@@ -637,12 +715,13 @@ namespace RAMGuardian.Dashboard
             pnlControls.Controls.Add(_chkEdgeBackgroundDisable);
             pnlControls.Controls.Add(_btnEdgeApplyPolicies);
             pnlControls.Controls.Add(_btnEdgeRestoreDefaults);
+            pnlControls.Controls.Add(btnEdgeTrimAll);
 
             cardEdgeInfo.Controls.Add(lblEdgeHead);
             cardEdgeInfo.Controls.Add(_lblEdgeSummary);
             cardEdgeInfo.Controls.Add(pnlControls);
 
-            var pnlEdgeListContainer = new DarkCardPanel { Location = new Point(8, 178), Size = new Size(910, 320) };
+            var pnlEdgeListContainer = new DarkCardPanel { Location = new Point(8, 202), Size = new Size(910, 300) };
             var lblTableTitle = new Label { Text = "ACTIVE EDGE PROCESS INVENTORY & ROLES", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = Color.FromArgb(0, 180, 216), Location = new Point(14, 10), AutoSize = true };
 
             _lvEdgeProcesses = new ListView
@@ -1445,6 +1524,106 @@ namespace RAMGuardian.Dashboard
             _configManager.SaveConfig(_currentConfig);
             UpdateModeRadios(mode);
             _lblFooterStatus.Text = string.Format("Operating mode switched to '{0}'.", mode);
+        }
+
+        private void OnOneClickOptimizeClicked(object sender, EventArgs e)
+        {
+            ExecuteOneClickOptimization();
+        }
+
+        private void ExecuteOneClickOptimization()
+        {
+            try
+            {
+                if (_btnHeaderOptimize != null)
+                {
+                    _btnHeaderOptimize.Enabled = false;
+                    _btnHeaderOptimize.Text = "⏳ OPTIMIZING...";
+                }
+                if (_btnQuickOptimize != null)
+                {
+                    _btnQuickOptimize.Enabled = false;
+                    _btnQuickOptimize.Text = "⏳ Optimizing...";
+                }
+                if (_btnEdgeQuickOpt != null)
+                {
+                    _btnEdgeQuickOpt.Enabled = false;
+                    _btnEdgeQuickOpt.Text = "⏳ Trimming...";
+                }
+                Cursor.Current = Cursors.WaitCursor;
+                Refresh();
+
+                OptimizationSummary summary = _oneClickOptimizer.OptimizeAll(_currentConfig);
+
+                if (_latestSnapshot == null)
+                {
+                    _latestSnapshot = new StateSnapshot();
+                }
+                _latestSnapshot.Metrics.MemoryLoadPercentage = summary.FinalMemoryLoad;
+                _latestSnapshot.Metrics.AvailablePhysicalBytes = (long)(summary.FinalAvailableMB * 1024.0 * 1024.0);
+                _latestSnapshot.Metrics.UsedPhysicalBytes = Math.Max(0L, _latestSnapshot.Metrics.TotalPhysicalBytes - _latestSnapshot.Metrics.AvailablePhysicalBytes);
+                if (_latestSnapshot.EdgeStatus != null)
+                {
+                    _latestSnapshot.EdgeStatus.TotalWorkingSetBytes = (long)(summary.EdgeFinalWorkingSetMB * 1024.0 * 1024.0);
+                }
+
+                UpdateOverviewTab(_latestSnapshot);
+                UpdatePressureBadge(_latestSnapshot.PressureLevel);
+
+                LoadLatestSnapshot();
+
+                string toastMsg = string.Format(
+                    "⚡ OPTIMIZATION COMPLETE: Reclaimed {0:F1} MB RAM  |  Edge Reduced: {1:F1} MB ({2} procs)  |  New RAM Load: {3:F0}%",
+                    summary.ReclaimedRamMB,
+                    summary.EdgeReclaimedMB,
+                    summary.EdgeProcessesTrimmed,
+                    summary.FinalMemoryLoad);
+
+                _lblToastBanner.Text = toastMsg;
+                _lblToastBanner.Visible = true;
+                if (_toastTimer != null)
+                {
+                    _toastTimer.Stop();
+                    _toastTimer.Start();
+                }
+
+                _lblFooterStatus.Text = string.Format(
+                    "⚡ Quick Optimization Complete: Reclaimed {0:F1} MB Physical RAM (Edge Reclaimed: {1:F1} MB). Current RAM Load: {2:F0}%.",
+                    summary.ReclaimedRamMB, summary.EdgeReclaimedMB, summary.FinalMemoryLoad);
+
+                if (_lbAutoActionLog != null)
+                {
+                    _lbAutoActionLog.Items.Insert(0, string.Format(
+                        "[{0:HH:mm:ss}] ⚡ 1-Click Optimization: Reclaimed {1:F1} MB RAM. Edge reduced by {2:F1} MB across {3} processes. RAM Load: {4:F0}%.",
+                        DateTime.Now, summary.ReclaimedRamMB, summary.EdgeReclaimedMB, summary.EdgeProcessesTrimmed, summary.FinalMemoryLoad));
+                }
+
+                try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("ONE_CLICK_OPT_FAIL", "Failed during 1-click optimization", ex);
+                MessageBox.Show("Optimization encountered an issue: " + ex.Message, "RAM Guardian", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                if (_btnHeaderOptimize != null)
+                {
+                    _btnHeaderOptimize.Enabled = true;
+                    _btnHeaderOptimize.Text = "⚡ OPTIMIZE NOW";
+                }
+                if (_btnQuickOptimize != null)
+                {
+                    _btnQuickOptimize.Enabled = true;
+                    _btnQuickOptimize.Text = "⚡ OPTIMIZE RAM & EDGE NOW";
+                }
+                if (_btnEdgeQuickOpt != null)
+                {
+                    _btnEdgeQuickOpt.Enabled = true;
+                    _btnEdgeQuickOpt.Text = "⚡ Trim Edge RAM";
+                }
+                Cursor.Current = Cursors.Default;
+            }
         }
 
         private void OnEmergencyStopClicked(object sender, EventArgs e)

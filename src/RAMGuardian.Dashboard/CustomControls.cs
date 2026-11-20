@@ -211,7 +211,18 @@ namespace RAMGuardian.Dashboard
 
     public class DarkButton : Button
     {
+        private Color _normalBackColor = Color.FromArgb(32, 36, 50);
         public Color AccentColor { get; set; }
+
+        public Color NormalBackColor
+        {
+            get { return _normalBackColor; }
+            set
+            {
+                _normalBackColor = value;
+                BackColor = value;
+            }
+        }
 
         public DarkButton()
         {
@@ -219,7 +230,7 @@ namespace RAMGuardian.Dashboard
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 1;
             FlatAppearance.BorderColor = Color.FromArgb(50, 56, 75);
-            BackColor = Color.FromArgb(32, 36, 50);
+            BackColor = _normalBackColor;
             ForeColor = Color.White;
             Font = new Font("Segoe UI", 9f, FontStyle.Regular);
             Cursor = Cursors.Hand;
@@ -229,14 +240,21 @@ namespace RAMGuardian.Dashboard
         protected override void OnMouseEnter(EventArgs e)
         {
             base.OnMouseEnter(e);
-            BackColor = Color.FromArgb(42, 48, 68);
+            if (_normalBackColor.R > 180 || _normalBackColor.G > 180 || _normalBackColor.B > 180)
+            {
+                BackColor = Color.FromArgb(Math.Min(255, _normalBackColor.R + 25), Math.Min(255, _normalBackColor.G + 25), Math.Min(255, _normalBackColor.B + 25));
+            }
+            else
+            {
+                BackColor = Color.FromArgb(42, 48, 68);
+            }
             FlatAppearance.BorderColor = AccentColor;
         }
 
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
-            BackColor = Color.FromArgb(32, 36, 50);
+            BackColor = _normalBackColor;
             FlatAppearance.BorderColor = Color.FromArgb(50, 56, 75);
         }
     }

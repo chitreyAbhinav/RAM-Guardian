@@ -595,6 +595,20 @@ namespace RAMGuardian.Tests
                 Assert(summary.Contains("Emergency Stop"), "Summary indicates Emergency Stop active");
             }, ref passed, ref failed);
 
+            RunTest("Test 21: OneClickOptimizer Dual RAM and Edge Optimization", () =>
+            {
+                var opt = new OneClickOptimizer();
+                var cfg = new GuardianConfig { OperatingMode = "GamingFocus" };
+                OptimizationSummary summary = opt.OptimizeAll(cfg);
+
+                Assert(summary != null, "Summary is not null");
+                Assert(summary.InitialAvailableMB > 0, "Initial available RAM > 0");
+                Assert(summary.FinalAvailableMB > 0, "Final available RAM > 0");
+                Assert(summary.InitialMemoryLoad >= 1 && summary.InitialMemoryLoad <= 100, "Initial memory load valid");
+                Assert(summary.FinalMemoryLoad >= 1 && summary.FinalMemoryLoad <= 100, "Final memory load valid");
+                Assert(!string.IsNullOrEmpty(summary.DetailsMessage), "Details message is populated");
+            }, ref passed, ref failed);
+
             Console.WriteLine();
             Console.WriteLine("===============================================================");
             Console.ForegroundColor = failed == 0 ? ConsoleColor.Green : ConsoleColor.Red;

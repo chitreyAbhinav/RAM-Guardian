@@ -43,6 +43,7 @@
     <Compile Include="Actions\ActionRegistry.cs" />
     <Compile Include="ProcessTerminationEngine.cs" />
     <Compile Include="EdgeOptimizer.cs" />
+    <Compile Include="OneClickOptimizer.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

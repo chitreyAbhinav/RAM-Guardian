@@ -85,6 +85,24 @@ namespace RAMGuardian.Security.Policies
             return false;
         }
 
+        public bool IsSystemOrHardwareProtected(string processName)
+        {
+            if (string.IsNullOrWhiteSpace(processName)) return true;
+            string cleanName = Path.GetFileNameWithoutExtension(processName).Trim();
+            return ImmutableSystemProcesses.Contains(cleanName) ||
+                   ImmutableSecurityProcesses.Contains(cleanName) ||
+                   ImmutableMemoryProcesses.Contains(cleanName) ||
+                   ImmutableHardwareProcesses.Contains(cleanName) ||
+                   ImmutableAcademicProcesses.Contains(cleanName) ||
+                   _userProtectedProcesses.Contains(cleanName);
+        }
+
+        public bool IsProcessProtected(string processName)
+        {
+            string dummy;
+            return IsProcessProtected(processName, out dummy);
+        }
+
         public bool IsProcessProtected(string processName, out string reason)
         {
             if (string.IsNullOrWhiteSpace(processName))

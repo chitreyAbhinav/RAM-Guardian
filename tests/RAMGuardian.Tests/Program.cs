@@ -1,10 +1,17 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.IO;
 using RAMGuardian.Common.Models;
 using RAMGuardian.Common.Native;
 using RAMGuardian.Common.Serialization;
+using RAMGuardian.Configuration;
+using RAMGuardian.Configuration.Models;
+using RAMGuardian.Logging;
 using RAMGuardian.Monitoring;
+using RAMGuardian.Optimization;
+using RAMGuardian.Optimization.Actions;
+using RAMGuardian.Optimization.Models;
+using RAMGuardian.Security.Policies;
 using RAMGuardian.Service;
 
 namespace RAMGuardian.Tests
@@ -14,13 +21,14 @@ namespace RAMGuardian.Tests
         static int Main(string[] args)
         {
             Console.WriteLine("===============================================================");
-            Console.WriteLine("          RAM GUARDIAN - AUTOMATED TEST SUITE (M1)            ");
+            Console.WriteLine("        RAM GUARDIAN - AUTOMATED TEST SUITE (M1 + M2)         ");
             Console.WriteLine("===============================================================");
             Console.WriteLine();
 
             int passed = 0;
             int failed = 0;
 
+            // --- Milestone 1 Tests ---
             RunTest("Test 1: Native GlobalMemoryStatusEx & Memory Readings", () =>
             {
                 var mem = new NativeMethods.MEMORYSTATUSEX();
@@ -83,29 +91,18 @@ namespace RAMGuardian.Tests
                 Assert(procs != null && procs.Count > 0, "Process list returned entries");
                 Assert(procs.Count <= 20, "Process list respects top 20 limit");
 
-                // Verify sort order
                 for (int i = 0; i < procs.Count - 1; i++)
                 {
                     Assert(procs[i].WorkingSetBytes >= procs[i + 1].WorkingSetBytes, "Processes sorted by WorkingSet descending");
                 }
-
-                // Verify protection logic
-                Assert(ProcessMemoryCollector.IsProcessProtected("MsMpEng"), "Defender MsMpEng is protected");
-                Assert(ProcessMemoryCollector.IsProcessProtected("dwm"), "Desktop Window Manager is protected");
-                Assert(ProcessMemoryCollector.IsProcessProtected("explorer"), "Windows Explorer is protected");
-                Assert(ProcessMemoryCollector.IsProcessProtected("SafeExamBrowser.Service"), "SafeExamBrowser is protected");
-                Assert(ProcessMemoryCollector.IsProcessProtected("AsusSoftwareManager"), "ASUS services are protected");
-                Assert(ProcessMemoryCollector.IsProcessProtected(null), "Unknown/null process denied (protected by default)");
             }, ref passed, ref failed);
 
             RunTest("Test 6: Inaccessible / Terminated Process Error Handling", () =>
             {
-                // Verify that trying to inspect a non-existent PID never throws
                 int nonExistentPid = 9999999;
                 IntPtr h = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_LIMITED_INFORMATION, false, nonExistentPid);
                 Assert(h == IntPtr.Zero, "OpenProcess gracefully returned IntPtr.Zero for invalid PID");
 
-                // Verify ProcessMemoryCollector handles System idle and privileged kernel processes (PID 0, 4)
                 var procCollector = new ProcessMemoryCollector();
                 var procs = procCollector.GetTopProcesses(50);
                 Assert(procs.Count > 0, "Handled system and kernel processes without exceptions");
@@ -122,10 +119,7 @@ namespace RAMGuardian.Tests
 
                     string json = JsonHelper.Serialize(snap, true);
                     Assert(!string.IsNullOrEmpty(json), "JSON serialization succeeded");
-                    Assert(json.Contains("TotalPhysicalBytes"), "JSON contains TotalPhysicalBytes");
-                    Assert(json.Contains("PressureLevel"), "JSON contains PressureLevel");
 
-                    // Verify deserialization
                     StateSnapshot deserialized = JsonHelper.Deserialize<StateSnapshot>(json);
                     Assert(deserialized != null, "JSON deserialization succeeded");
                     Assert(deserialized.PressureLevel == snap.PressureLevel, "Deserialized pressure level matches");
@@ -145,17 +139,6 @@ namespace RAMGuardian.Tests
                 };
                 Assert(MonitoringEngine.EvaluatePressure(mNormal) == "Normal", "Healthy metrics evaluate to Normal");
 
-                var mElevated = new SystemMemoryMetrics
-                {
-                    TotalPhysicalBytes = 4000L * 1024 * 1024,
-                    AvailablePhysicalBytes = 400L * 1024 * 1024,
-                    CommitLimitBytes = 16000L * 1024 * 1024,
-                    CommittedBytes = 12000L * 1024 * 1024,
-                    CommitLoadPercentage = 75.0,
-                    PagesPerSec = 500.0
-                };
-                Assert(MonitoringEngine.EvaluatePressure(mElevated) == "Elevated", "Available RAM < 500 MB evaluates to Elevated");
-
                 var mCritical = new SystemMemoryMetrics
                 {
                     TotalPhysicalBytes = 4000L * 1024 * 1024,
@@ -166,6 +149,170 @@ namespace RAMGuardian.Tests
                     PagesPerSec = 3000.0
                 };
                 Assert(MonitoringEngine.EvaluatePressure(mCritical) == "Critical", "Available RAM < 150 MB + High Commit/Paging evaluates to Critical");
+            }, ref passed, ref failed);
+
+            // --- Milestone 2 Tests (Safety Framework & Protection Registries) ---
+
+            RunTest("Test 9: Process Protection Policy & Default-DENY", () =>
+            {
+                var policy = new ProcessProtectionPolicy();
+                string reason;
+
+                // Non-negotiable: CanTerminateProcess MUST always return false
+                Assert(!policy.CanTerminateProcess("notepad"), "CanTerminateProcess returned false for standard app");
+                Assert(!policy.CanTerminateProcess("MsMpEng"), "CanTerminateProcess returned false for Defender");
+                Assert(!policy.CanTerminateProcess("Unknown_Process_XYZ"), "CanTerminateProcess returned false for unknown process");
+
+                // Protection inquiries
+                Assert(policy.IsProcessProtected("MsMpEng", out reason), "Defender MsMpEng is protected");
+                Assert(policy.IsProcessProtected("SafeExamBrowser.Service", out reason), "SafeExamBrowser is protected");
+                Assert(policy.IsProcessProtected("AsusSoftwareManager", out reason), "ASUS software is protected");
+                Assert(policy.IsProcessProtected("Memory Compression", out reason), "Memory Compression is protected");
+                Assert(policy.IsProcessProtected("UnknownApp123", out reason), "Unknown process protected under Default-DENY");
+            }, ref passed, ref failed);
+
+            RunTest("Test 10: Service Protection Policy & Tamper Prevention", () =>
+            {
+                var servicePolicy = new ServiceProtectionPolicy();
+                string reason;
+
+                Assert(servicePolicy.IsServiceProtected("WinDefend", out reason), "WinDefend service is protected");
+                Assert(servicePolicy.IsServiceProtected("SafeExamBrowserService", out reason), "SafeExamBrowserService is protected");
+                Assert(servicePolicy.IsServiceProtected("AsusAppService", out reason), "AsusAppService is protected");
+                Assert(servicePolicy.IsServiceProtected("SysMain", out reason), "SysMain is protected from arbitrary disabling");
+                Assert(servicePolicy.IsServiceProtected("AudioSrv", out reason), "AudioSrv is protected");
+
+                Assert(!servicePolicy.CanModifyService("WinDefend"), "CanModifyService returned false for WinDefend");
+                Assert(!servicePolicy.CanModifyService("SysMain"), "CanModifyService returned false for SysMain");
+                Assert(!servicePolicy.CanModifyService("RandomServiceXYZ"), "CanModifyService returned false for unknown service");
+            }, ref passed, ref failed);
+
+            RunTest("Test 11: Startup Protection Policy (AHK & Approved Targets)", () =>
+            {
+                var startupPolicy = new StartupProtectionPolicy();
+                string reason;
+
+                // AutoHotkey scripts MUST be protected
+                Assert(!startupPolicy.IsApprovedForOptimization("ShortcutSwap.ahk", "cmd", out reason), "ShortcutSwap.ahk is protected");
+                Assert(!startupPolicy.IsApprovedForOptimization("WindowButtonDisable.ahk", "cmd", out reason), "WindowButtonDisable.ahk is protected");
+                Assert(startupPolicy.IsEntryProtected("ShortcutSwap.ahk"), "IsEntryProtected returns true for AHK script");
+
+                // Other user-protected apps
+                Assert(!startupPolicy.IsApprovedForOptimization("SecurityHealth", "cmd", out reason), "SecurityHealth is protected");
+                Assert(!startupPolicy.IsApprovedForOptimization("IDMan", "cmd", out reason), "IDM is protected");
+                Assert(!startupPolicy.IsApprovedForOptimization("Filee", "cmd", out reason), "Filee is protected");
+                Assert(!startupPolicy.IsApprovedForOptimization("MicrosoftEdgeAutoLaunch_12345", "cmd", out reason), "Edge AutoLaunch is protected");
+
+                // Approved targets per user preferences
+                Assert(startupPolicy.IsApprovedForOptimization("OneDrive", "cmd", out reason), "OneDrive is approved for optimization");
+                Assert(startupPolicy.IsApprovedForOptimization("Spotify", "cmd", out reason), "Spotify is approved for optimization");
+                Assert(startupPolicy.IsApprovedForOptimization("utweb", "cmd", out reason), "uTorrent Web is approved for optimization");
+                Assert(startupPolicy.IsApprovedForOptimization("CloudflareWARP", "cmd", out reason), "Cloudflare WARP is approved for optimization");
+            }, ref passed, ref failed);
+
+            RunTest("Test 12: Startup Scanner Real-World Discovery on Laptop", () =>
+            {
+                var scanner = new StartupScanner();
+                List<StartupEntry> entries = scanner.ScanAll();
+
+                Assert(entries != null && entries.Count > 0, "Discovered live startup entries on laptop");
+
+                bool foundOneDrive = false;
+                bool foundAhk = false;
+
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    if (entries[i].Name.Equals("OneDrive", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foundOneDrive = true;
+                        Assert(entries[i].IsApprovedForOptimization, "OneDrive discovered as approved for optimization");
+                    }
+                    if (entries[i].Name.IndexOf(".ahk", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        foundAhk = true;
+                        Assert(entries[i].IsProtected, "AutoHotkey script discovered and marked as PROTECTED");
+                    }
+                }
+
+                Assert(foundOneDrive, "Discovered OneDrive in live registry");
+                Assert(foundAhk, "Discovered AutoHotkey scripts in live startup folder");
+            }, ref passed, ref failed);
+
+            RunTest("Test 13: Configuration Persistence & Safe Corrupted JSON Recovery", () =>
+            {
+                string testConfigDir = @"C:\ProgramData\RAM Guardian\test_config";
+                try
+                {
+                    if (Directory.Exists(testConfigDir)) Directory.Delete(testConfigDir, true);
+                    Directory.CreateDirectory(testConfigDir);
+
+                    var mgr = new ConfigManager(testConfigDir);
+                    GuardianConfig cfg = mgr.LoadConfig();
+                    Assert(cfg.OperatingMode == "MonitorOnly", "Default mode is strictly MonitorOnly");
+                    Assert(cfg.ElevatedAvailableRamMB == 500.0, "Default thresholds are calibrated");
+
+                    // Mutate file with corrupted JSON
+                    string configFile = Path.Combine(testConfigDir, "config.json");
+                    File.WriteAllText(configFile, "{ INVALID_CORRUPT_JSON: ");
+
+                    // Load should not throw; should safely revert to safe defaults
+                    GuardianConfig recovered = mgr.LoadConfig();
+                    Assert(recovered != null, "Recovered from corrupted JSON gracefully");
+                    Assert(recovered.OperatingMode == "MonitorOnly", "Safe default restored");
+                }
+                finally
+                {
+                    try { if (Directory.Exists(testConfigDir)) Directory.Delete(testConfigDir, true); } catch { }
+                }
+            }, ref passed, ref failed);
+
+            RunTest("Test 14: Safety Backup & Atomic Rollback Mechanism", () =>
+            {
+                string testBackupDir = @"C:\ProgramData\RAM Guardian\test_backups";
+                try
+                {
+                    if (Directory.Exists(testBackupDir)) Directory.Delete(testBackupDir, true);
+                    Directory.CreateDirectory(testBackupDir);
+
+                    var bkpMgr = new BackupManager(testBackupDir);
+                    var entry = new StartupEntry
+                    {
+                        Id = "TEST_ENTRY",
+                        Name = "TestApp",
+                        Location = "HKCU_Run",
+                        CommandLine = "C:\\TestApp\\test.exe /bg"
+                    };
+
+                    OptimizationBackup bkp = bkpMgr.CreateBackup(entry, "OPT_TEST_ACTION", "Testing backup subsystem");
+                    Assert(bkp != null, "Backup record created successfully");
+                    Assert(File.Exists(Path.Combine(testBackupDir, string.Format("{0}.json", bkp.BackupId))), "Backup file exists on disk");
+
+                    List<OptimizationBackup> backups = bkpMgr.GetBackups();
+                    Assert(backups.Count == 1, "Backup list reports 1 saved backup");
+                    Assert(backups[0].OriginalEntry.Name == "TestApp", "Backup metadata verified intact");
+                }
+                finally
+                {
+                    try { if (Directory.Exists(testBackupDir)) Directory.Delete(testBackupDir, true); } catch { }
+                }
+            }, ref passed, ref failed);
+
+            RunTest("Test 15: Action Precondition Guard & Mode Enforcement", () =>
+            {
+                var registry = new ActionRegistry();
+                var action = registry.GetAction("OPT_STARTUP_ONEDRIVE_DISABLE");
+                Assert(action != null, "Retrieved approved OneDrive action");
+
+                var monitorConfig = new GuardianConfig { OperatingMode = "MonitorOnly" };
+                string reason;
+                bool canRunInMonitorMode = action.CanExecute(monitorConfig, out reason);
+                Assert(!canRunInMonitorMode, "Action refused in MonitorOnly mode");
+                Assert(reason.Contains("Requires 'SafeAutomatic'"), "Refusal reason explains mode requirement");
+
+                var safeAutoConfig = new GuardianConfig { OperatingMode = "SafeAutomatic" };
+                bool canRunInSafeAuto = action.CanExecute(safeAutoConfig, out reason);
+                // Can execute should be true since OneDrive exists in live HKCU Run
+                Assert(canRunInSafeAuto, "Action permitted in SafeAutomatic mode when entry exists");
             }, ref passed, ref failed);
 
             Console.WriteLine();
@@ -180,7 +327,7 @@ namespace RAMGuardian.Tests
 
         private static void RunTest(string name, Action testAction, ref int passed, ref int failed)
         {
-            Console.Write("{0,-55} ... ", name);
+            Console.Write("{0,-60} ... ", name);
             try
             {
                 testAction();

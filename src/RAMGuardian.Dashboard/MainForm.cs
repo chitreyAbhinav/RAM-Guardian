@@ -1069,13 +1069,16 @@ namespace RAMGuardian.Dashboard
             cardThresholds.Controls.Add(new Label { Text = "AVAILABLE RAM PRESSURE THRESHOLDS (ASUS VivoBook 4 GB Profile)", Font = new Font("Segoe UI", 10f, FontStyle.Bold), ForeColor = Color.FromArgb(0, 180, 216), Location = new Point(14, 10), AutoSize = true });
 
             var lblElev = new Label { Text = "Elevated Pressure Threshold (Available RAM MB):", Location = new Point(14, 38), AutoSize = true, ForeColor = Color.White };
-            _numElevatedMB = new NumericUpDown { Location = new Point(340, 35), Width = 80, Minimum = 200, Maximum = 1500, Value = (decimal)_currentConfig.ElevatedAvailableRamMB, BackColor = Color.FromArgb(32, 36, 50), ForeColor = Color.White };
+            decimal elevVal = (decimal)Math.Min(3500.0, Math.Max(100.0, _currentConfig.ElevatedAvailableRamMB));
+            _numElevatedMB = new NumericUpDown { Location = new Point(340, 35), Width = 80, Minimum = 100, Maximum = 3500, Value = elevVal, BackColor = Color.FromArgb(32, 36, 50), ForeColor = Color.White };
 
             var lblHigh = new Label { Text = "High Pressure Threshold (Available RAM MB):", Location = new Point(14, 70), AutoSize = true, ForeColor = Color.White };
-            _numHighMB = new NumericUpDown { Location = new Point(340, 67), Width = 80, Minimum = 100, Maximum = 800, Value = (decimal)_currentConfig.HighAvailableRamMB, BackColor = Color.FromArgb(32, 36, 50), ForeColor = Color.White };
+            decimal highVal = (decimal)Math.Min(3000.0, Math.Max(50.0, _currentConfig.HighAvailableRamMB));
+            _numHighMB = new NumericUpDown { Location = new Point(340, 67), Width = 80, Minimum = 50, Maximum = 3000, Value = highVal, BackColor = Color.FromArgb(32, 36, 50), ForeColor = Color.White };
 
             var lblCrit = new Label { Text = "Critical Pressure Threshold (Available RAM MB):", Location = new Point(14, 102), AutoSize = true, ForeColor = Color.White };
-            _numCriticalMB = new NumericUpDown { Location = new Point(340, 99), Width = 80, Minimum = 50, Maximum = 400, Value = (decimal)_currentConfig.CriticalAvailableRamMB, BackColor = Color.FromArgb(32, 36, 50), ForeColor = Color.White };
+            decimal critVal = (decimal)Math.Min(2500.0, Math.Max(20.0, _currentConfig.CriticalAvailableRamMB));
+            _numCriticalMB = new NumericUpDown { Location = new Point(340, 99), Width = 80, Minimum = 20, Maximum = 2500, Value = critVal, BackColor = Color.FromArgb(32, 36, 50), ForeColor = Color.White };
 
             cardThresholds.Controls.Add(lblElev);
             cardThresholds.Controls.Add(_numElevatedMB);

@@ -33,7 +33,12 @@ namespace RAMGuardian.Optimization
         private readonly ProcessProtectionPolicy _protectionPolicy;
         private readonly FileLogger _logger;
 
-        public OneClickOptimizer(EdgeOptimizer edgeOptimizer = null, ProcessProtectionPolicy protectionPolicy = null, FileLogger logger = null)
+        public OneClickOptimizer()
+            : this(null, null, null)
+        {
+        }
+
+        public OneClickOptimizer(EdgeOptimizer edgeOptimizer, ProcessProtectionPolicy protectionPolicy, FileLogger logger)
         {
             _edgeOptimizer = edgeOptimizer ?? new EdgeOptimizer();
             _protectionPolicy = protectionPolicy ?? new ProcessProtectionPolicy();

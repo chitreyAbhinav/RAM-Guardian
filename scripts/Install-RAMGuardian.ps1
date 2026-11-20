@@ -115,7 +115,17 @@ try {
     $shortcutStart.Description = "RAM Guardian Resource Monitor Dashboard"
     $shortcutStart.Save()
 
-    Write-Host "Created Desktop and Start Menu shortcuts." -ForegroundColor Green
+    # User Startup Folder Shortcut (Auto-start Dashboard on boot / login)
+    $startupPath = [Environment]::GetFolderPath("Startup")
+    if (Test-Path $startupPath) {
+        $shortcutStartup = $wsh.CreateShortcut("$startupPath\RAM Guardian.lnk")
+        $shortcutStartup.TargetPath = "$InstallDir\RAMGuardian.Dashboard.exe"
+        $shortcutStartup.IconLocation = "$InstallDir\ramguardian.ico,0"
+        $shortcutStartup.Description = "RAM Guardian Resource Monitor Dashboard"
+        $shortcutStartup.Save()
+    }
+
+    Write-Host "Created Desktop, Start Menu, and Auto-Start Startup shortcuts." -ForegroundColor Green
 } catch {
     Write-Warning "Could not create shell shortcuts: $_"
 }

@@ -166,7 +166,7 @@ namespace RAMGuardian.Configuration
                 c.OperatingMode != "GamingFocus" &&
                 c.OperatingMode != "Paused")
             {
-                c.OperatingMode = "MonitorOnly";
+                c.OperatingMode = "GamingFocus";
             }
 
             if (c.ApprovedTerminationTargets == null)

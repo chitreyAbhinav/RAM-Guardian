@@ -49,10 +49,10 @@ namespace RAMGuardian.Optimization
                 return false;
             }
 
-            // Mode Check: Only BalancedAuto and AggressiveAuto permit process management
-            if (config.OperatingMode != "BalancedAuto" && config.OperatingMode != "AggressiveAuto")
+            // Mode Check: Only BalancedAuto, AggressiveAuto, and GamingFocus permit process management
+            if (config.OperatingMode != "BalancedAuto" && config.OperatingMode != "AggressiveAuto" && config.OperatingMode != "GamingFocus")
             {
-                auditMessage = string.Format("Action prohibited in mode '{0}'. Only BalancedAuto and AggressiveAuto permit automated closure.", config.OperatingMode);
+                auditMessage = string.Format("Action prohibited in mode '{0}'. Only BalancedAuto, AggressiveAuto, and GamingFocus permit automated closure.", config.OperatingMode);
                 return false;
             }
 
@@ -145,8 +145,8 @@ namespace RAMGuardian.Optimization
                     return false;
                 }
 
-                // LEVEL 4: Controlled Termination (AggressiveAuto Only)
-                if (config.OperatingMode == "AggressiveAuto")
+                // LEVEL 4: Controlled Termination (AggressiveAuto and GamingFocus extreme cases)
+                if (config.OperatingMode == "AggressiveAuto" || config.OperatingMode == "GamingFocus")
                 {
                     _logger.Warn("GRADUATED_L4", string.Format("Executing controlled termination on approved target '{0}' (PID {1})...",
                         target.ProcessName, target.ProcessId));
@@ -156,8 +156,8 @@ namespace RAMGuardian.Optimization
                         proc.Kill();
                         proc.WaitForExit(1500);
 
-                        auditMessage = string.Format("Success (Level 4): Process '{0}' (PID {1}) terminated under AggressiveAuto policy. Reclaimed {2:F1} MB RAM.",
-                            target.ProcessName, target.ProcessId, target.WorkingSetMB);
+                        auditMessage = string.Format("Success (Level 4): Process '{0}' (PID {1}) terminated under {2} policy. Reclaimed {3:F1} MB RAM.",
+                            target.ProcessName, target.ProcessId, config.OperatingMode, target.WorkingSetMB);
                         _logger.Info("PROCESS_TERMINATED", auditMessage);
                         return true;
                     }

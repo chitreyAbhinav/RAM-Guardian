@@ -46,7 +46,26 @@ foreach ($d in $dirs) {
     }
 }
 
-# 4. Copy Binaries
+# 4. Stop existing service and running processes before copying binaries
+$svc = Get-Service -Name "RAMGuardian" -ErrorAction SilentlyContinue
+if ($svc) {
+    Write-Host "Stopping existing RAMGuardian service..." -ForegroundColor Yellow
+    Stop-Service -Name "RAMGuardian" -Force -ErrorAction SilentlyContinue
+    $timeout = 10
+    while ($timeout -gt 0 -and (Get-Service -Name "RAMGuardian" -ErrorAction SilentlyContinue).Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
+        Start-Sleep -Seconds 1
+        $timeout--
+    }
+}
+
+# Stop any running Dashboard or Service processes that could lock DLLs
+Get-Process -Name "RAMGuardian*" -ErrorAction SilentlyContinue | ForEach-Object {
+    Write-Host "Stopping running process $($_.ProcessName) (PID: $($_.Id))..." -ForegroundColor Yellow
+    Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+}
+Start-Sleep -Seconds 2
+
+# 5. Copy Binaries
 Write-Host "Installing application binaries to $InstallDir..." -ForegroundColor Cyan
 $releaseDir = "$projectRoot\src\RAMGuardian.Service\bin\Release"
 $dashReleaseDir = "$projectRoot\src\RAMGuardian.Dashboard\bin\Release"
@@ -55,14 +74,6 @@ Get-ChildItem -Path $releaseDir -Filter "*.dll" | Copy-Item -Destination $Instal
 Get-ChildItem -Path $releaseDir -Filter "*.exe" | Copy-Item -Destination $InstallDir -Force
 Get-ChildItem -Path $dashReleaseDir -Filter "*.exe" | Copy-Item -Destination $InstallDir -Force
 Copy-Item -Path "$projectRoot\assets\icons\ramguardian.ico" -Destination "$InstallDir\ramguardian.ico" -Force -ErrorAction SilentlyContinue
-
-# 5. Stop existing service if running
-$svc = Get-Service -Name "RAMGuardian" -ErrorAction SilentlyContinue
-if ($svc) {
-    Write-Host "Stopping existing RAMGuardian service..." -ForegroundColor Yellow
-    Stop-Service -Name "RAMGuardian" -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-}
 
 # 6. Register Windows Service
 $installedServicePath = "$InstallDir\RAMGuardian.Service.exe"
@@ -112,6 +123,6 @@ try {
 Write-Host ""
 Write-Host "===============================================================" -ForegroundColor Green
 Write-Host "   RAM GUARDIAN INSTALLATION COMPLETE!                         " -ForegroundColor Green
-Write-Host "   Default Mode: MonitorOnly (Non-destructive observation)     " -ForegroundColor Green
+Write-Host "   Default Mode: GamingFocus (Target 65%-70% RAM at all times) " -ForegroundColor Green
 Write-Host "   Service running silently in background with auto-restart.   " -ForegroundColor Green
 Write-Host "===============================================================" -ForegroundColor Green

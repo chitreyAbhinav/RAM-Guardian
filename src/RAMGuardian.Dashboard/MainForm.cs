@@ -411,7 +411,7 @@ namespace RAMGuardian.Dashboard
 
             // Left Top: RAM Meter Card
             var cardMeter = new DarkCardPanel { Location = new Point(8, 8), Size = new Size(280, 230) };
-            var lblMeterTitle = new Label { Text = "PHYSICAL MEMORY LOAD", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = Color.FromArgb(0, 180, 216), Location = new Point(14, 12), AutoSize = true };
+            var lblMeterTitle = new Label { Text = "RAM LOAD (GOAL: 65-70%)", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = Color.FromArgb(0, 180, 216), Location = new Point(14, 12), AutoSize = true };
             _ramMeter = new MemoryMeterControl { Location = new Point(65, 45), Size = new Size(150, 150) };
             cardMeter.Controls.Add(lblMeterTitle);
             cardMeter.Controls.Add(_ramMeter);
@@ -682,10 +682,10 @@ namespace RAMGuardian.Dashboard
             var cardModes = new DarkCardPanel { Location = new Point(8, 8), Size = new Size(910, 195) };
             cardModes.Controls.Add(new Label { Text = "OPERATING MODE SELECTION", Font = new Font("Segoe UI", 10f, FontStyle.Bold), ForeColor = Color.FromArgb(0, 180, 216), Location = new Point(14, 10), AutoSize = true });
 
-            _rbMonitorOnly = new RadioButton { Text = "1. MonitorOnly (Installation Default) — Read-only telemetry, zero changes, Edge diagnostics only.", Location = new Point(20, 38), Size = new Size(860, 24), ForeColor = Color.White };
+            _rbMonitorOnly = new RadioButton { Text = "1. MonitorOnly — Read-only telemetry, zero changes, Edge diagnostics only.", Location = new Point(20, 38), Size = new Size(860, 24), ForeColor = Color.White };
             _rbBalancedAuto = new RadioButton { Text = "2. BalancedAuto — Automatic management of unnecessary background apps (L2 Graceful Closure only).", Location = new Point(20, 66), Size = new Size(860, 24), ForeColor = Color.White };
             _rbAggressiveAuto = new RadioButton { Text = "3. AggressiveAuto — Maximum memory reclaiming; graduated L1-L4 closure for approved background targets.", Location = new Point(20, 94), Size = new Size(860, 24), ForeColor = Color.White };
-            _rbGamingFocus = new RadioButton { Text = "4. GamingFocus — Suspends background maintenance when full-screen game runs; zero frame drops.", Location = new Point(20, 122), Size = new Size(860, 24), ForeColor = Color.White };
+            _rbGamingFocus = new RadioButton { Text = "4. GamingFocus (Default) — Target 65-70% RAM at all times; active background tuning & extreme-case escalation.", Location = new Point(20, 122), Size = new Size(860, 24), ForeColor = Color.White };
             _rbPaused = new RadioButton { Text = "5. Paused — Monitoring & automated optimizations completely suspended.", Location = new Point(20, 150), Size = new Size(860, 24), ForeColor = Color.White };
 
             _rbMonitorOnly.CheckedChanged += OnModeRadioChanged;

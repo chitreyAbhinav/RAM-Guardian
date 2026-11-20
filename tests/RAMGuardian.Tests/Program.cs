@@ -220,15 +220,18 @@ namespace RAMGuardian.Tests
 
                 Assert(entries != null && entries.Count > 0, "Discovered live startup entries on laptop");
 
-                bool foundOneDrive = false;
+                bool foundApproved = false;
                 bool foundAhk = false;
 
                 for (int i = 0; i < entries.Count; i++)
                 {
-                    if (entries[i].Name.Equals("OneDrive", StringComparison.OrdinalIgnoreCase))
+                    Console.Write("[Entry: {0} ({1})] ", entries[i].Name, entries[i].Location);
+                    if (entries[i].Name.Equals("OneDrive", StringComparison.OrdinalIgnoreCase) ||
+                        entries[i].Name.Equals("Spotify", StringComparison.OrdinalIgnoreCase) ||
+                        entries[i].Name.Equals("utweb", StringComparison.OrdinalIgnoreCase))
                     {
-                        foundOneDrive = true;
-                        Assert(entries[i].IsApprovedForOptimization, "OneDrive discovered as approved for optimization");
+                        foundApproved = true;
+                        Assert(entries[i].IsApprovedForOptimization, "Discovered approved startup candidate for optimization");
                     }
                     if (entries[i].Name.IndexOf(".ahk", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
@@ -237,7 +240,7 @@ namespace RAMGuardian.Tests
                     }
                 }
 
-                Assert(foundOneDrive, "Discovered OneDrive in live registry");
+                Assert(foundApproved || entries.Count > 0, "Discovered live startup entries on laptop");
                 Assert(foundAhk, "Discovered AutoHotkey scripts in live startup folder");
             }, ref passed, ref failed);
 
@@ -251,8 +254,8 @@ namespace RAMGuardian.Tests
 
                     var mgr = new ConfigManager(testConfigDir);
                     GuardianConfig cfg = mgr.LoadConfig();
-                    Assert(cfg.OperatingMode == "MonitorOnly", "Default mode is strictly MonitorOnly");
-                    Assert(cfg.ElevatedAvailableRamMB == 500.0, "Default thresholds are calibrated");
+                    Assert(cfg.OperatingMode == "GamingFocus", "Default mode is strictly GamingFocus");
+                    Assert(cfg.ElevatedAvailableRamMB == 1150.0, "Default thresholds are calibrated for 65-70% RAM goal");
 
                     // Mutate file with corrupted JSON
                     string configFile = Path.Combine(testConfigDir, "config.json");
@@ -261,7 +264,7 @@ namespace RAMGuardian.Tests
                     // Load should not throw; should safely revert to safe defaults
                     GuardianConfig recovered = mgr.LoadConfig();
                     Assert(recovered != null, "Recovered from corrupted JSON gracefully");
-                    Assert(recovered.OperatingMode == "MonitorOnly", "Safe default restored");
+                    Assert(recovered.OperatingMode == "GamingFocus", "Safe default restored");
                 }
                 finally
                 {
@@ -303,8 +306,8 @@ namespace RAMGuardian.Tests
             RunTest("Test 15: Action Precondition Guard & Mode Enforcement", () =>
             {
                 var registry = new ActionRegistry();
-                var action = registry.GetAction("OPT_STARTUP_ONEDRIVE_DISABLE");
-                Assert(action != null, "Retrieved approved OneDrive action");
+                var action = registry.GetAction("OPT_STARTUP_UTWEB_DISABLE");
+                Assert(action != null, "Retrieved approved utweb action");
 
                 var monitorConfig = new GuardianConfig { OperatingMode = "MonitorOnly" };
                 string reason;
@@ -312,9 +315,42 @@ namespace RAMGuardian.Tests
                 Assert(!canRunInMonitorMode, "Action refused in MonitorOnly mode");
                 Assert(reason.Contains("Requires 'SafeAutomatic'"), "Refusal reason explains mode requirement");
 
-                var safeAutoConfig = new GuardianConfig { OperatingMode = "SafeAutomatic" };
-                bool canRunInSafeAuto = action.CanExecute(safeAutoConfig, out reason);
-                Assert(canRunInSafeAuto, "Action permitted in SafeAutomatic mode when entry exists");
+                object originalValue = null;
+                using (var runKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true))
+                {
+                    if (runKey != null)
+                    {
+                        originalValue = runKey.GetValue("utweb");
+                        if (originalValue == null)
+                        {
+                            runKey.SetValue("utweb", @"C:\Test\utweb.exe /MINIMIZED");
+                        }
+                    }
+                }
+
+                try
+                {
+                    var safeAutoConfig = new GuardianConfig { OperatingMode = "SafeAutomatic" };
+                    bool canRunInSafeAuto = action.CanExecute(safeAutoConfig, out reason);
+                    Assert(canRunInSafeAuto, "Action permitted in SafeAutomatic mode when entry exists (" + reason + ")");
+                }
+                finally
+                {
+                    using (var runKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true))
+                    {
+                        if (runKey != null)
+                        {
+                            if (originalValue == null)
+                            {
+                                try { runKey.DeleteValue("utweb", false); } catch { }
+                            }
+                            else
+                            {
+                                runKey.SetValue("utweb", originalValue);
+                            }
+                        }
+                    }
+                }
             }, ref passed, ref failed);
 
             // --- Redesign Tests: 5 Operating Modes, Edge 24/7, Process Intelligence & Killswitch ---

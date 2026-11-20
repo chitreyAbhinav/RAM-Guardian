@@ -68,15 +68,11 @@ namespace RAMGuardian.Optimization
                 bool disableBackground = config.EdgeBackgroundModeDisabled;
                 bool disableStartupBoost = config.EdgeStartupBoostDisabled;
 
-                if (config.OperatingMode == "AggressiveAuto")
+                if (config.OperatingMode == "AggressiveAuto" || config.OperatingMode == "GamingFocus")
                 {
                     if (config.EdgeSleepingTabsTimeoutSeconds <= 0) timeoutSeconds = 120;
                     disableBackground = true;
                     disableStartupBoost = true;
-                }
-                else if (config.OperatingMode == "GamingFocus")
-                {
-                    if (config.EdgeSleepingTabsTimeoutSeconds <= 0) timeoutSeconds = 900;
                 }
 
                 // 1. Read existing policy keys to create backup if not already backed up

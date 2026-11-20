@@ -123,6 +123,6 @@ try {
 Write-Host ""
 Write-Host "===============================================================" -ForegroundColor Green
 Write-Host "   RAM GUARDIAN INSTALLATION COMPLETE!                         " -ForegroundColor Green
-Write-Host "   Default Mode: MonitorOnly (Non-destructive observation)     " -ForegroundColor Green
+Write-Host "   Default Mode: GamingFocus (Target 65%-70% RAM at all times) " -ForegroundColor Green
 Write-Host "   Service running silently in background with auto-restart.   " -ForegroundColor Green
 Write-Host "===============================================================" -ForegroundColor Green

@@ -97,13 +97,19 @@ namespace RAMGuardian.Core.Analysis
 
             // 4. Memory Pressure & Cooldown Check for Process/Startup Management
             bool pressureRequiresAction = (trend.CurrentPressureLevel == "High" || trend.CurrentPressureLevel == "Critical");
+            if (config.OperatingMode == "GamingFocus" || config.OperatingMode == "AggressiveAuto")
+            {
+                // In GamingFocus and AggressiveAuto, the goal is 65%-70% RAM: act as soon as usage is Elevated (>70%)
+                pressureRequiresAction = (trend.CurrentPressureLevel == "Elevated" || trend.CurrentPressureLevel == "High" || trend.CurrentPressureLevel == "Critical");
+            }
+
             if (!pressureRequiresAction || !trend.CanAttemptOptimization(config))
             {
                 return false;
             }
 
-            // 5. Controlled Background Process Management (BalancedAuto & AggressiveAuto)
-            if ((config.OperatingMode == "BalancedAuto" || config.OperatingMode == "AggressiveAuto") && topProcs != null)
+            // 5. Controlled Background Process Management (BalancedAuto, AggressiveAuto, and GamingFocus)
+            if ((config.OperatingMode == "BalancedAuto" || config.OperatingMode == "AggressiveAuto" || config.OperatingMode == "GamingFocus") && topProcs != null)
             {
                 for (int i = 0; i < topProcs.Count; i++)
                 {

@@ -24,11 +24,15 @@ namespace RAMGuardian.Configuration.Models
         public bool EdgeStartupBoostDisabled { get; set; }
         public List<string> EdgeProtectedWebsites { get; set; }
 
+        // Target Memory Usage Goals (65% to 70% average memory usage at all times)
+        public double TargetMemoryUsagePercentageMin { get; set; }
+        public double TargetMemoryUsagePercentageMax { get; set; }
+
         // Interval Settings
         public int MonitoringIntervalSeconds { get; set; }
         public int DashboardRefreshIntervalSeconds { get; set; }
 
-        // Pressure Thresholds (Calibrated for 4 GB RAM VivoBook X515EA)
+        // Pressure Thresholds (Calibrated for 65%-70% RAM goal on 3.7 GB RAM VivoBook X515EA)
         public double ElevatedAvailableRamMB { get; set; }
         public double HighAvailableRamMB { get; set; }
         public double CriticalAvailableRamMB { get; set; }
@@ -48,40 +52,44 @@ namespace RAMGuardian.Configuration.Models
         public int LogRetentionDays { get; set; }
         public long MaxLogFileSizeBytes { get; set; }
 
-        // Explicitly Approved Background Targets for Controlled Termination (AggressiveAuto only)
+        // Explicitly Approved Background Targets for Controlled Termination (AggressiveAuto & GamingFocus extreme cases)
         public List<string> ApprovedTerminationTargets { get; set; }
 
         public GuardianConfig()
         {
-            OperatingMode = "MonitorOnly"; // Installation default
+            OperatingMode = "GamingFocus"; // Default mode: proactive 65-70% RAM goal & full-throttle optimization
             IsEmergencyStopped = false;
 
-            // Microsoft Edge Built-in Settings
+            // Microsoft Edge Built-in Settings (Aggressive defaults to maintain 65-70% goal)
             EdgeOptimizationEnabled = true; // Always ON by default
-            EdgeSleepingTabsTimeoutSeconds = 300; // 5 minutes
+            EdgeSleepingTabsTimeoutSeconds = 120; // 2 minutes proactive sleep
             EdgeEfficiencyModeEnabled = true;
-            EdgeBackgroundModeDisabled = false;
-            EdgeStartupBoostDisabled = false;
+            EdgeBackgroundModeDisabled = true; // Stop background apps when Edge closes
+            EdgeStartupBoostDisabled = true; // Prevent background pre-loading at boot
             EdgeProtectedWebsites = new List<string>
             {
                 "*.google.com", "*.youtube.com", "*.teams.microsoft.com", "*.zoom.us", "*.github.com"
             };
 
+            // Calibrated for 65%-70% Memory Usage Goal on ASUS VivoBook X515EA (~3.7 GB RAM)
+            TargetMemoryUsagePercentageMin = 65.0;
+            TargetMemoryUsagePercentageMax = 70.0;
+
             MonitoringIntervalSeconds = 15;
             DashboardRefreshIntervalSeconds = 4;
 
-            ElevatedAvailableRamMB = 500.0;
-            HighAvailableRamMB = 250.0;
-            CriticalAvailableRamMB = 150.0;
+            ElevatedAvailableRamMB = 1150.0; // Triggers when RAM usage > 70% (~1,150 MB free)
+            HighAvailableRamMB = 950.0;      // Triggers when RAM usage > 75% (~950 MB free)
+            CriticalAvailableRamMB = 550.0;  // Extreme case: RAM usage > 85% (~550 MB free)
 
-            ElevatedCommitPercentage = 78.0;
-            HighCommitPercentage = 82.0;
-            CriticalCommitPercentage = 90.0;
+            ElevatedCommitPercentage = 68.0;
+            HighCommitPercentage = 75.0;
+            CriticalCommitPercentage = 85.0;
 
             HighPagingPagesPerSec = 1500.0;
             CriticalPagingPagesPerSec = 2500.0;
 
-            CooldownMinutes = 5;
+            CooldownMinutes = 3; // Responsive 3-minute cooldown between automated intervention rounds
             EnableNotifications = true;
             LaunchDashboardOnLogin = false;
             MinimizeDashboardToTray = true;

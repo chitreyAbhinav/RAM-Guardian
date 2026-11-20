@@ -49,6 +49,12 @@ try {
 } catch { }
 
 # 4. Remove Installation Files
+Get-Process -Name "RAMGuardian*" -ErrorAction SilentlyContinue | ForEach-Object {
+    Write-Host "Stopping running process $($_.ProcessName) (PID: $($_.Id))..." -ForegroundColor Yellow
+    Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+}
+Start-Sleep -Seconds 2
+
 if (Test-Path $InstallDir) {
     Write-Host "Removing installed binaries from $InstallDir..." -ForegroundColor Yellow
     Remove-Item -Path $InstallDir -Recurse -Force

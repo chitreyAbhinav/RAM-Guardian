@@ -1,0 +1,19 @@
+﻿{
+  "OperatingMode": "MonitorOnly",
+  "MonitoringIntervalSeconds": 15,
+  "DashboardRefreshIntervalSeconds": 5,
+  "ElevatedAvailableRamMB": 500.0,
+  "HighAvailableRamMB": 250.0,
+  "CriticalAvailableRamMB": 150.0,
+  "ElevatedCommitPercentage": 78.0,
+  "HighCommitPercentage": 82.0,
+  "CriticalCommitPercentage": 90.0,
+  "HighPagingPagesPerSec": 1500.0,
+  "CriticalPagingPagesPerSec": 2500.0,
+  "CooldownMinutes": 5,
+  "EnableNotifications": true,
+  "LaunchDashboardOnLogin": false,
+  "MinimizeDashboardToTray": true,
+  "LogRetentionDays": 14,
+  "MaxLogFileSizeBytes": 10485760
+}
